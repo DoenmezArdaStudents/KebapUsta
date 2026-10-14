@@ -343,13 +343,22 @@ local function newCode(): string
 	return tostring(os.time() % 10000)
 end
 
+-- save slots: which of their 3 restaurants each player has picked in the lobby
+local selected: { [Player]: number } = {}
+
+local function slotInfo(pl: Player, slot: number?)
+	local meta = DataService.GetMeta(pl)
+	return meta and slot and meta.slots[slot] or nil
+end
+
 local function snapshot(l: Lobby)
 	local list = {}
 	for _, pl in ipairs(l.members) do
-		local d = DataService.Get(pl)
-		table.insert(list, { userId = pl.UserId, name = pl.DisplayName, ready = l.ready[pl] == true, host = pl == l.host, level = d and d.level or 1 })
+		local s = slotInfo(pl, selected[pl])
+		table.insert(list, { userId = pl.UserId, name = pl.DisplayName, ready = l.ready[pl] == true, host = pl == l.host, level = s and s.level or 1 })
 	end
-	return { code = l.code, members = list, starting = l.starting, max = MAX }
+	local hs = slotInfo(l.host, selected[l.host])
+	return { code = l.code, members = list, starting = l.starting, max = MAX, slotName = hs and hs.name or nil, slotLevel = hs and hs.level or nil }
 end
 
 local function push(l: Lobby?)
@@ -416,7 +425,7 @@ local function join(pl: Player, code: any)
 end
 
 -- teleport a group into a fresh reserved server; retries, then reports failure
-local function teleport(players: { Player }, hostId: number, l: Lobby?)
+local function teleport(players: { Player }, hostId: number, l: Lobby?, slot: number?)
 	if RunService:IsStudio() then
 		-- Studio can't teleport: run the session right here
 		for _, pl in ipairs(players) do
@@ -424,7 +433,7 @@ local function teleport(players: { Player }, hostId: number, l: Lobby?)
 		end
 		task.wait(1.2)
 		if LobbyService.StartInPlace then
-			LobbyService.StartInPlace(hostId)
+			LobbyService.StartInPlace(hostId, slot)
 		end
 		return true
 	end
@@ -435,7 +444,7 @@ local function teleport(players: { Player }, hostId: number, l: Lobby?)
 		local ok, err = pcall(function()
 			local options = Instance.new("TeleportOptions")
 			options.ShouldReserveServer = true
-			options:SetTeleportData({ host = hostId, v = 1 })
+			options:SetTeleportData({ host = hostId, slot = slot or 1, v = 2 })
 			TeleportService:TeleportAsync(game.PlaceId, players, options)
 		end)
 		if ok then
@@ -467,9 +476,13 @@ local function start(pl: Player)
 			return { ok = false, msg = "lobby_not_ready" }
 		end
 	end
+	local slot = selected[pl]
+	if not slotInfo(pl, slot) then
+		return { ok = false, msg = "lobby_no_slot" }
+	end
 	l.starting = true
 	push(l)
-	task.spawn(teleport, table.clone(l.members), l.host.UserId, l)
+	task.spawn(teleport, table.clone(l.members), l.host.UserId, l, slot)
 	return { ok = true }
 end
 
@@ -522,16 +535,108 @@ function LobbyService.Init()
 		if memberOf[pl] and memberOf[pl].starting then
 			return { ok = false }
 		end
+		local slot = selected[pl]
+		if not slotInfo(pl, slot) then
+			return { ok = false, msg = "lobby_no_slot" }
+		end
 		leave(pl)
-		task.spawn(teleport, { pl }, pl.UserId, nil)
+		task.spawn(teleport, { pl }, pl.UserId, nil, slot)
 		return { ok = true }
 	end)
-	Net.OnRequest("LobbyProfile", function(pl)
-		local d = DataService.Get(pl)
-		if not d then
+	-- save slot cards: list / create / select / delete (delete needs a confirm token from a first call)
+	local pendingDelete: { [Player]: { slot: number, t: number } } = {}
+	local function slotState(pl: Player)
+		local meta = DataService.GetMeta(pl)
+		local t0 = os.clock()
+		while not meta and os.clock() - t0 < 10 and pl.Parent do
+			task.wait(0.25)
+			meta = DataService.GetMeta(pl)
+		end
+		if not meta then
 			return { ok = false }
 		end
-		return { ok = true, level = d and d.level or 1, cash = d and d.cash or 0, day = d and d.day or 1, served = d and d.stats and d.stats.served or 0 }
+		local cards = {}
+		for i = 1, DataService.SLOTS do
+			cards[i] = meta.slots[i] or { exists = false }
+		end
+		if not selected[pl] then
+			local last = meta.lastSlot
+			if last and cards[last] and cards[last].exists then
+				selected[pl] = last
+			else
+				for i = 1, DataService.SLOTS do
+					if cards[i].exists then
+						selected[pl] = i
+						break
+					end
+				end
+			end
+		end
+		return { ok = true, slots = cards, selected = selected[pl] }
+	end
+	local function inStartingLobby(pl: Player): boolean
+		return memberOf[pl] ~= nil and memberOf[pl].starting
+	end
+	Net.OnRequest("SlotList", slotState)
+	Net.OnRequest("SlotSelect", function(pl, n)
+		n = tonumber(n)
+		if not n or inStartingLobby(pl) or not slotInfo(pl, n) then
+			return { ok = false }
+		end
+		selected[pl] = n
+		push(memberOf[pl])
+		return slotState(pl)
+	end)
+	Net.OnRequest("SlotCreate", function(pl, n)
+		n = tonumber(n)
+		if not n or inStartingLobby(pl) or not DataService.CreateSlot(pl, n) then
+			return { ok = false }
+		end
+		selected[pl] = n
+		push(memberOf[pl])
+		return slotState(pl)
+	end)
+	Net.OnRequest("SlotDelete", function(pl, args)
+		local n = type(args) == "table" and tonumber(args.slot)
+		if not n or inStartingLobby(pl) or not slotInfo(pl, n) then
+			return { ok = false }
+		end
+		local p = pendingDelete[pl]
+		if not (type(args) == "table" and args.confirm == true and p and p.slot == n and os.clock() - p.t < 15) then
+			pendingDelete[pl] = { slot = n, t = os.clock() }
+			return { ok = true, confirm = true }
+		end
+		pendingDelete[pl] = nil
+		if not DataService.DeleteSlot(pl, n) then
+			return { ok = false, msg = "slot_delete_failed" }
+		end
+		if selected[pl] == n then
+			selected[pl] = nil
+		end
+		push(memberOf[pl])
+		return slotState(pl)
+	end)
+	-- friends invited from a lobby join it automatically (the code travels as launch data)
+	local function autoJoin(pl: Player)
+		local ok, jd = pcall(function()
+			return pl:GetJoinData()
+		end)
+		local code = ok and jd and jd.LaunchData
+		if type(code) == "string" and lobbies[code] then
+			task.delay(1, join, pl, code)
+		end
+	end
+	Players.PlayerAdded:Connect(autoJoin)
+	Players.PlayerRemoving:Connect(function(pl)
+		selected[pl] = nil
+		pendingDelete[pl] = nil
+	end)
+	Net.OnRequest("LobbyProfile", function(pl)
+		local s = slotInfo(pl, selected[pl])
+		if not DataService.GetMeta(pl) then
+			return { ok = false }
+		end
+		return { ok = true, level = s and s.level or 1, cash = s and s.cash or 0, day = s and s.day or 1, served = 0, name = s and s.name }
 	end)
 	-- teleports that fail after leaving the server's hands (e.g. the place is full)
 	TeleportService.TeleportInitFailed:Connect(function(pl, result, msg)
@@ -544,6 +649,17 @@ function LobbyService.Init()
 			push(l)
 		end
 	end)
+end
+
+function LobbyService.JoinInfo(pl: Player): { host: number?, slot: number? }?
+	local ok, jd = pcall(function()
+		return pl:GetJoinData()
+	end)
+	local td = ok and jd and jd.TeleportData
+	if type(td) == "table" then
+		return { host = tonumber(td.host), slot = tonumber(td.slot) }
+	end
+	return nil
 end
 
 -- game servers: the teleport data names the host whose restaurant is loaded

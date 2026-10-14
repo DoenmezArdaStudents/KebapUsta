@@ -685,7 +685,8 @@ local function chooseOwner()
 		owner = preferred
 	end
 	for _, p in ipairs(Players:GetPlayers()) do
-		if not owner and DataService.Get(p) then
+		-- guests play on the host's save and can never own the shop themselves
+		if not owner and DataService.Get(p) and not DataService.IsGuest(p) then
 			owner = p
 			break
 		end

@@ -32,6 +32,8 @@ local function serializeTicket(c)
 		total = t.order.total,
 		model = c.model,
 		createdAt = t.createdAt,
+		takerId = t.taker and t.taker.UserId or nil,
+		takerName = t.taker and t.taker.DisplayName or nil,
 		takeaway = t.order.items[1] and t.order.items[1].takeaway,
 	}
 end
@@ -103,6 +105,11 @@ end
 function OrderService.Serve(player: Player, c)
 	local t = tickets[c.id]
 	if not t then
+		return "nothing"
+	end
+	-- every order belongs to the player who took it: nobody else can serve (or get paid for) it
+	if t.taker and t.taker ~= player and t.taker.Parent then
+		Net.Notify(player, ("🔒 Das ist die Bestellung von %s"):format(t.taker.DisplayName), nil, "warn")
 		return "nothing"
 	end
 	local tray = FoodPreparationService.Tray(player)
@@ -300,6 +307,18 @@ OrderService.ModHook = nil :: ((any) -> (number, number, number))?
 OrderService.CompletedHook = nil :: ((Player, any, number, any, any) -> ())?
 
 function OrderService.Init()
+	-- a player who disconnects keeps their orders for 20 s (rejoin), then they are free for everyone
+	game:GetService("Players").PlayerRemoving:Connect(function(p)
+		task.delay(20, function()
+			for _, t in pairs(tickets) do
+				if t.taker == p then
+					t.taker = nil
+					Net.NotifyAll(("🔓 Die Bestellung von %s ist jetzt frei"):format(t.customer.name), nil, "info")
+				end
+			end
+			OrderService.PushTickets()
+		end)
+	end)
 	Net.OnRequest("GetTickets", function()
 		OrderService.PushTickets()
 		return { ok = true }

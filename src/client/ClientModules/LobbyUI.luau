@@ -27,6 +27,8 @@ local MSG = {
 	lobby_not_found = "Lobby nicht gefunden.",
 	lobby_full = "Die Lobby ist voll (max. 4).",
 	lobby_not_ready = "Noch nicht alle sind bereit.",
+	lobby_no_slot = "Wähle zuerst einen Spielstand (oder erstelle einen neuen).",
+	slot_delete_failed = "Löschen fehlgeschlagen – bitte später nochmal.",
 }
 
 local function toast(text: string)
@@ -137,7 +139,11 @@ local function renderLobby()
 		else
 			local b = Kit.button({ Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = F.bold, TextSize = 16, TextColor3 = T.dim, Text = "＋\nFreund einladen", Parent = c }, function()
 				pcall(function()
-					SocialService:PromptGameInvite(player)
+					-- the lobby code travels with the invite: the friend lands directly in this lobby
+					local opts = Instance.new("ExperienceInviteOptions")
+					opts.LaunchData = lobby and lobby.code or ""
+					opts.PromptMessage = "Komm in mein Kebap Haus!"
+					SocialService:PromptGameInvite(player, opts)
 				end)
 			end)
 			local _ = b
@@ -151,7 +157,83 @@ local function renderLobby()
 	local canStart = amHost and allReady and not lobby.starting
 	refs.start.BackgroundColor3 = canStart and T.accent or Color3.fromRGB(70, 70, 80)
 	refs.start.Text = lobby.starting and "Startet …" or (allReady and "▶ Spiel starten" or "Warte auf alle …")
-	refs.roomSub.Text = string.format("%d / %d Spieler  ·  Code teilen oder Freunde einladen", #lobby.members, lobby.max)
+	refs.roomSub.Text = string.format("%d / %d Spieler  ·  🏪 %s", #lobby.members, lobby.max, lobby.slotName or "Host wählt Spielstand …")
+end
+
+---------------------------------------------------------------------------
+-- save slots: three restaurant cards (create / select / delete with confirmation)
+---------------------------------------------------------------------------
+local slotData: any = nil
+local deleteArm: { [number]: number } = {}
+
+local function fmtTime(sec: number): string
+	sec = math.floor(sec or 0)
+	local h, m = sec // 3600, (sec % 3600) // 60
+	return h > 0 and string.format("%dh %02dm", h, m) or string.format("%d min", m)
+end
+
+local function refreshProfile()
+	local r = State.Request("LobbyProfile")
+	if r and r.ok and refs.profile then
+		refs.profile.Text = r.name and string.format("%s\nLevel %d  ·  €%.2f  ·  Tag %d", r.name, r.level, r.cash, r.day) or "Kein Spielstand gewählt"
+	end
+end
+
+local renderSlots
+local function applySlots(r: any)
+	if r and r.ok then
+		slotData = r
+		renderSlots()
+		refreshProfile()
+	end
+end
+
+renderSlots = function()
+	local box = refs.slotCards :: Frame
+	if not box or not slotData then
+		return
+	end
+	Kit.clear(box, { "UIGridLayout" })
+	for i = 1, #slotData.slots do
+		local s = slotData.slots[i]
+		local sel = slotData.selected == i
+		local c = Kit.glass({ LayoutOrder = i, BackgroundTransparency = sel and 0.05 or 0.3, Parent = box }, 12)
+		Kit.stroke(sel and GOLD or Color3.fromRGB(80, 80, 88), 0, sel and 3 or 1).Parent = c
+		if s.exists then
+			local click = Kit.button({ Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = c }, function()
+				applySlots(request("SlotSelect", i))
+			end)
+			local _ = click
+			label({ Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -40, 0, 18), Font = F.bold, TextSize = 12, TextColor3 = sel and GOLD or T.dim, Text = "SPIELSTAND " .. i .. (sel and "  ✓" or ""), Parent = c })
+			label({ Position = UDim2.fromOffset(10, 26), Size = UDim2.new(1, -20, 0, 38), Font = F.black, TextSize = 15, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Text = s.name or ("Kebap Haus " .. i), Parent = c })
+			label({ Position = UDim2.fromOffset(10, 66), Size = UDim2.new(1, -20, 0, 18), Font = F.bold, TextSize = 14, TextColor3 = T.green, Text = string.format("€%.0f", s.cash or 0), Parent = c })
+			label({ Position = UDim2.fromOffset(10, 84), Size = UDim2.new(1, -20, 0, 16), TextSize = 12, TextColor3 = T.text, Text = string.format("Level %d · Tag %d", s.level or 1, s.day or 1), Parent = c })
+			label({ Position = UDim2.fromOffset(10, 102), Size = UDim2.new(1, -20, 0, 16), TextSize = 11, TextColor3 = T.dim, Text = "⏱ " .. fmtTime(s.playtime or 0) .. (s.last and ("  ·  " .. os.date("%d.%m.%y", s.last)) or ""), Parent = c })
+			local armed = deleteArm[i] and os.clock() - deleteArm[i] < 12
+			Kit.button({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(armed and 64 or 26, 24), BackgroundColor3 = armed and Color3.fromRGB(200, 50, 40) or Color3.fromRGB(60, 56, 60), Font = F.bold, TextSize = 12, Text = armed and "Löschen!" or "🗑", Radius = 6, Parent = c }, function()
+				if armed then
+					deleteArm[i] = nil
+					local r = request("SlotDelete", { slot = i, confirm = true })
+					if r and r.ok then
+						toast("Spielstand " .. i .. " gelöscht.")
+					end
+					applySlots(r)
+				else
+					local r = request("SlotDelete", { slot = i })
+					if r and r.confirm then
+						deleteArm[i] = os.clock()
+						toast("Nochmal tippen, um Spielstand " .. i .. " endgültig zu löschen.")
+						renderSlots()
+						task.delay(12, renderSlots)
+					end
+				end
+			end)
+		else
+			Kit.button({ Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = F.bold, TextSize = 15, TextColor3 = T.dim, Text = "＋\nNeuer\nSpielstand", Parent = c }, function()
+				applySlots(request("SlotCreate", i))
+			end)
+		end
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -180,7 +262,10 @@ local function build()
 	refs.profile = label({ Position = UDim2.fromOffset(94, 46), Size = UDim2.new(1, -104, 0, 34), TextSize = 15, TextColor3 = T.dim, TextWrapped = true, Text = "Lade Spielstand …", Parent = prof })
 
 	-- main menu
-	local menu = new("Frame", { Name = "Menu", Position = UDim2.fromOffset(0, 224), Size = UDim2.new(1, -20, 0, 300), BackgroundTransparency = 1, Parent = side })
+	local slotBox = new("Frame", { Name = "SlotCards", Position = UDim2.fromOffset(0, 216), Size = UDim2.new(1, -20, 0, 128), BackgroundTransparency = 1, Parent = side })
+	new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 1, 0), CellPadding = UDim2.fromOffset(9, 0), SortOrder = Enum.SortOrder.LayoutOrder, Parent = slotBox })
+	refs.slotCards = slotBox
+	local menu = new("Frame", { Name = "Menu", Position = UDim2.fromOffset(0, 360), Size = UDim2.new(1, -20, 0, 300), BackgroundTransparency = 1, Parent = side })
 	list(false, 12).Parent = menu
 	refs.menu = menu
 	bigButton(menu, 1, "▶  Solo spielen", T.accent, function()
@@ -197,7 +282,7 @@ local function build()
 	label({ LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 40), TextSize = 14, TextColor3 = T.dim, TextWrapped = true, Text = "Bis zu 4 Spieler führen gemeinsam das Restaurant des Hosts. Dein Fortschritt wird automatisch gespeichert.", Parent = menu })
 
 	-- lobby room
-	local room = new("Frame", { Name = "Room", Position = UDim2.fromOffset(0, 224), Size = UDim2.new(0, 560, 0, 420), BackgroundTransparency = 1, Visible = false, Parent = side })
+	local room = new("Frame", { Name = "Room", Position = UDim2.fromOffset(0, 360), Size = UDim2.new(0, 560, 0, 420), BackgroundTransparency = 1, Visible = false, Parent = side })
 	refs.room = room
 	refs.roomTitle = label({ Size = UDim2.new(1, 0, 0, 36), Font = F.black, TextSize = 30, Text = "", Parent = room })
 	refs.roomSub = label({ Position = UDim2.fromOffset(0, 36), Size = UDim2.new(1, 0, 0, 20), TextSize = 15, TextColor3 = T.dim, Text = "", Parent = room })
@@ -259,9 +344,9 @@ function LobbyUI.Init()
 	end)
 	task.spawn(function()
 		for _ = 1, 20 do
-			local r = State.Request("LobbyProfile")
-			if r and r.ok and r.level then
-				refs.profile.Text = string.format("Level %d  ·  €%.2f  ·  Tag %d  ·  %d Kunden bedient", r.level, r.cash, r.day, r.served)
+			local r = State.Request("SlotList")
+			if r and r.ok then
+				applySlots(r)
 				return
 			end
 			task.wait(1)

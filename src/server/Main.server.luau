@@ -93,7 +93,19 @@ if isGameServer then
 		lobby:Destroy()
 	end
 else
-	LobbyService.StartInPlace = startGame
+	-- Studio cannot teleport: the lobby session starts right here on the host's slot
+	LobbyService.StartInPlace = function(hostId: number, slot: number?)
+		local host = Players:GetPlayerByUserId(hostId)
+		if host then
+			DataService.Load(host, slot)
+		end
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= host then
+				DataService.LoadGuest(p, host)
+			end
+		end
+		startGame(hostId)
+	end
 	LobbyService.Init()
 end
 
@@ -127,11 +139,96 @@ Net.OnRequest("Sync", function(player)
 	return { ok = true }
 end)
 
+-- co-op session end (host left / host never arrived): back to the lobby, progress is saved
+local TeleportService = game:GetService("TeleportService")
+local function sessionEnd(list: { Player }, msg: string)
+	for _, p in ipairs(list) do
+		Net.Notify(p, "🏠 " .. msg, nil, "warn")
+	end
+	task.wait(4)
+	local alive = {}
+	for _, p in ipairs(list) do
+		if p.Parent then
+			table.insert(alive, p)
+		end
+	end
+	if #alive == 0 then
+		return
+	end
+	local ok = not game:GetService("RunService"):IsStudio() and pcall(function()
+		TeleportService:TeleportAsync(game.PlaceId, alive)
+	end)
+	if not ok then
+		for _, p in ipairs(alive) do
+			p:Kick(msg)
+		end
+	end
+end
+
+-- the host loads their selected slot; everybody else plays as a guest on the host's restaurant
+local function loadForGame(player: Player, hostId: number?, slot: number?)
+	if not hostId or player.UserId == hostId then
+		DataService.Load(player, slot)
+		return
+	end
+	local t0 = os.clock()
+	local host = nil
+	while player.Parent and os.clock() - t0 < 60 do
+		host = Players:GetPlayerByUserId(hostId)
+		if host and DataService.Get(host) and not DataService.IsGuest(host) then
+			break
+		end
+		host = nil
+		task.wait(0.5)
+	end
+	if host then
+		DataService.LoadGuest(player, host)
+		EconomyService.Push(player)
+		Net.Notify(player, ("👥 Du arbeitest im Restaurant von %s"):format(host.DisplayName), nil, "info")
+	elseif player.Parent then
+		sessionEnd({ player }, "Der Host ist nicht im Spiel – zurück zur Lobby")
+	end
+end
+
 local function onPlayer(player: Player)
 	task.spawn(function()
-		DataService.Load(player)
+		if isGameServer then
+			local info = LobbyService.JoinInfo(player) or {}
+			loadForGame(player, info.host or RestaurantService.PreferredOwnerId, info.slot)
+		elseif ReplicatedStorage:GetAttribute("Mode") == "game" then
+			loadForGame(player, RestaurantService.PreferredOwnerId, nil) -- late joiner in a Studio session
+		else
+			DataService.LoadMeta(player) -- lobby: only the slot cards
+		end
 	end)
 end
+-- host chat command "!gastkauf": allow / forbid guests to make big purchases this session
+local function hostChat(p: Player)
+	p.Chatted:Connect(function(msg)
+		if msg:lower() == "!gastkauf" and (p.UserId == RestaurantService.PreferredOwnerId or RestaurantService.IsOwner(p)) then
+			EconomyService.GuestsMaySpend = not EconomyService.GuestsMaySpend
+			Net.NotifyAll(EconomyService.GuestsMaySpend and "👑 Der Host erlaubt Gästen jetzt alle Käufe" or "👑 Große Käufe macht wieder nur der Host", nil, "info")
+		end
+	end)
+end
+Players.PlayerAdded:Connect(hostChat)
+for _, p in ipairs(Players:GetPlayers()) do
+	hostChat(p)
+end
+Players.PlayerRemoving:Connect(function(player)
+	if ReplicatedStorage:GetAttribute("Mode") ~= "game" or player.UserId ~= RestaurantService.PreferredOwnerId then
+		return
+	end
+	local guests = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and DataService.IsGuest(p) then
+			table.insert(guests, p)
+		end
+	end
+	if #guests > 0 then
+		task.spawn(sessionEnd, guests, "Der Host hat das Restaurant verlassen – alles ist gespeichert")
+	end
+end)
 Players.PlayerAdded:Connect(onPlayer)
 for _, p in ipairs(Players:GetPlayers()) do
 	onPlayer(p)
@@ -195,6 +292,14 @@ if game:GetService("RunService"):IsStudio() then
 		elseif cmd == "construct" then
 			BusinessService.DebugConstruct(arg)
 			return true
+		elseif cmd == "guest" then
+			-- simulate a co-op guest: arg = player index to turn into a guest of player 1
+			local g = Players:GetPlayers()[arg or 2]
+			if g and g ~= p then
+				DataService.LoadGuest(g, p)
+				return true
+			end
+			return false
 		elseif cmd == "data" and p then
 			return DataService.Get(p)
 		elseif cmd == "restock" and p then

@@ -1380,7 +1380,7 @@ function CustomerService.TakeOrder(player: Player, c, viaLaptop: boolean?, staff
 		if not c.alive or c.state ~= "Ordering" then
 			return
 		end
-		OrderService.CreateTicket(c, order, player)
+		OrderService.CreateTicket(c, order, (not staff) and player or nil) -- staff orders are open to everyone
 		Net.Sound(player, "register")
 		setState(c, "WaitingForFood")
 		c.patience = math.min(c.maxPatience, c.patience + c.maxPatience * 0.15)

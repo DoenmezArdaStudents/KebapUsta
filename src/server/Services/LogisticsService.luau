@@ -372,6 +372,11 @@ local function onShelf(player: Player, part: BasePart)
 end
 
 local function onCold(player: Player)
+	local ColdRoomService = require(script.Parent.ColdRoomService)
+	if ColdRoomService.IsCarrying(player) then
+		ColdRoomService.ReturnCarried(player)
+		return
+	end
 	local b, i = carried(player)
 	if not b then
 		return
@@ -397,6 +402,11 @@ end
 local function interactHook(player: Player, part: BasePart, kind: string): boolean
 	local b, i = carried(player)
 	if not b then
+		-- carrying a meat cone: no cooking with full hands either
+		if player:GetAttribute("Carry") and HANDS_FULL[kind] and kind ~= "spit_load" then
+			Net.Notify(player, "🙌 Erst den Fleischspieß abstellen", nil, "warn")
+			return true
+		end
 		return false
 	end
 	local sid = stockFor(kind, part:GetAttribute("Item"))

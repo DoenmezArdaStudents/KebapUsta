@@ -75,9 +75,17 @@ function EconomyService.AddCash(player: Player, amount: number, countAsEarned: b
 	EconomyService.Push(player)
 end
 
+-- co-op: guests share the host's money but big purchases (hiring, expansion, equipment …)
+-- need the host. The host can allow it for the session (PartyAllowSpend).
+EconomyService.GuestLimit = 150
+EconomyService.GuestsMaySpend = false
 function EconomyService.Spend(player: Player, amount: number): boolean
 	local data = DataService.Get(player)
 	if not data or amount < 0 or amount ~= amount then
+		return false
+	end
+	if DataService.IsGuest(player) and amount >= EconomyService.GuestLimit and not EconomyService.GuestsMaySpend then
+		Net.Notify(player, ("👑 Käufe ab €%d darf nur der Host machen"):format(EconomyService.GuestLimit), nil, "warn")
 		return false
 	end
 	if data.cash + 1e-6 < amount then

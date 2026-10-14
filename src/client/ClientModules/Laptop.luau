@@ -754,7 +754,7 @@ APPS.pos = {
 					delivered += 1
 				end
 			end
-			txt(b, { Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -110, 0, 22), Font = F.bold, TextSize = 16, Text = string.format("%s%s %s", t.vip and "⭐ " or "", t.emoji, t.name), TextTruncate = Enum.TextTruncate.AtEnd })
+			txt(b, { Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -110, 0, 22), Font = F.bold, TextSize = 16, Text = string.format("%s%s %s", t.vip and "⭐ " or "", t.emoji, t.name) .. (t.takerId and (t.takerId == game:GetService("Players").LocalPlayer.UserId and "  · 👤 Du" or ("  · 🔒 " .. (t.takerName or "?"))) or ""), TextTruncate = Enum.TextTruncate.AtEnd })
 			txt(b, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 8), Size = UDim2.fromOffset(100, 22), Font = F.bold, TextSize = 16, TextColor3 = ACCENT, TextXAlignment = Enum.TextXAlignment.Right, Text = money(t.total * ((shop and shop.premium) or 1)) })
 			txt(b, { Position = UDim2.fromOffset(12, 30), Size = UDim2.new(1, -24, 0, 18), TextSize = 13, TextColor3 = C().dim, Text = string.format("#%d · %d/%d %s%s", t.id, delivered, total, tr("serviert", "served"), #t.drinks > 0 and (" · " .. #t.drinks .. " 🥤") or "") })
 			local _, fill = Kit.bar({ Position = UDim2.new(0, 12, 0, 56), Size = UDim2.new(1, -24, 0, 6), Parent = b }, Kit.T.green, C().line)
@@ -788,7 +788,7 @@ APPS.pos = {
 			txt(right, { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextSize = 16, TextColor3 = C().dim, Text = tr("Wähle links eine Bestellung aus.", "Select an order on the left.") })
 			return
 		end
-		txt(right, { Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -170, 0, 30), Font = F.black, TextSize = 22, Text = string.format("%s%s %s", t.vip and "⭐ " or "", t.emoji, t.name), TextTruncate = Enum.TextTruncate.AtEnd })
+		txt(right, { Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -170, 0, 30), Font = F.black, TextSize = 22, Text = string.format("%s%s %s", t.vip and "⭐ " or "", t.emoji, t.name) .. (t.takerId and (t.takerId == game:GetService("Players").LocalPlayer.UserId and "  · 👤 Du" or ("  · 🔒 " .. (t.takerName or "?"))) or ""), TextTruncate = Enum.TextTruncate.AtEnd })
 		txt(right, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -18, 0, 12), Size = UDim2.fromOffset(150, 30), Font = F.black, TextSize = 22, TextColor3 = ACCENT, TextXAlignment = Enum.TextXAlignment.Right, Text = money(t.total * ((shop and shop.premium) or 1)) })
 		txt(right, { Position = UDim2.fromOffset(18, 42), Size = UDim2.new(1, -36, 0, 18), TextSize = 13, TextColor3 = C().dim, Text = tr("Kunde wartet vorne an der Theke bei den Brettern (Abholung).", "Customer waits at the counter in front of the prep boards (pickup).") })
 		local _, pfill = Kit.bar({ Position = UDim2.new(0, 18, 0, 66), Size = UDim2.new(1, -36, 0, 8), Parent = right }, Kit.T.green, C().line)
@@ -2587,7 +2587,7 @@ local function updateWorldScreen()
 		end
 		local row = new("Frame", { LayoutOrder = i, Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = Color3.fromRGB(240, 241, 245), BorderSizePixel = 0, ZIndex = 4, Parent = world.list }, { corner(8) })
 		local first = t.items[1]
-		label({ Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -120, 0, 26), Font = F.bold, TextSize = 19, TextColor3 = Color3.fromRGB(30, 30, 36), TextTruncate = Enum.TextTruncate.AtEnd, Text = string.format("%s%s %s", t.vip and "⭐" or "", t.emoji, t.name), ZIndex = 5, Parent = row })
+		label({ Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -120, 0, 26), Font = F.bold, TextSize = 19, TextColor3 = Color3.fromRGB(30, 30, 36), TextTruncate = Enum.TextTruncate.AtEnd, Text = string.format("%s%s %s", t.vip and "⭐" or "", t.emoji, t.name) .. (t.takerId and (t.takerId == game:GetService("Players").LocalPlayer.UserId and "  · 👤 Du" or ("  · 🔒 " .. (t.takerName or "?"))) or ""), ZIndex = 5, Parent = row })
 		label({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 4), Size = UDim2.fromOffset(110, 26), Font = F.bold, TextSize = 19, TextColor3 = ACCENT, TextXAlignment = Enum.TextXAlignment.Right, Text = money(t.total * ((State.shop and State.shop.premium) or 1)), ZIndex = 5, Parent = row })
 		label({ Position = UDim2.fromOffset(10, 28), Size = UDim2.new(1, -20, 0, 18), TextSize = 15, TextColor3 = Color3.fromRGB(100, 104, 116), TextTruncate = Enum.TextTruncate.AtEnd, Text = first and (OrderText.Title(first) .. (#t.items > 1 and string.format(" +%d", #t.items - 1) or "")) or "", ZIndex = 5, Parent = row })
 		local _, fill = Kit.bar({ Position = UDim2.new(0, 10, 1, -8), Size = UDim2.new(1, -20, 0, 4), ZIndex = 5, Parent = row }, Kit.T.green, Color3.fromRGB(220, 222, 230))

@@ -287,6 +287,23 @@ local function cone(parent: Instance, meat: string, base: CFrame, scale: number)
 	local m = Instance.new("Model")
 	m.Name = "MeatCone"
 	local def = IngredientData.Meat[meat]
+	local lib = game:GetService("ServerStorage"):FindFirstChild("Models") and game:GetService("ServerStorage").Models:FindFirstChild("Logistics")
+	local tpl = lib and lib:FindFirstChild("MeatCone") :: BasePart?
+	if tpl then
+		local p = tpl:Clone()
+		p.Size = Vector3.new(1.9, 3.2, 1.9) * scale
+		p.CFrame = base * CFrame.new(0, 1.6 * scale, 0)
+		p.Anchored = true
+		p.CanCollide = false
+		local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+		if sa then
+			sa.Color = meat == "veal" and Color3.fromRGB(235, 175, 165) or Color3.fromRGB(255, 240, 225)
+		end
+		p.Parent = m
+		part(m, "Wrap", Vector3.new(2.7 * scale, 1.85 * scale, 1.85 * scale), base * CFrame.new(0, 1.45 * scale, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(230, 240, 250), Enum.Material.Glass, { Shape = Enum.PartType.Cylinder, Transparency = 0.8, CanCollide = false, CanQuery = false })
+		m.Parent = parent
+		return m
+	end
 	part(m, "Tray", Vector3.new(1.9, 0.12, 1.9) * scale, base * CFrame.new(0, 0.06 * scale, 0), STEEL, Enum.Material.Metal, { CanCollide = false })
 	for i = 1, 5 do
 		local dia = (1.7 - i * 0.18) * scale
@@ -357,6 +374,7 @@ local function refreshShelves()
 end
 ColdRoomService.Refresh = refreshShelves
 
+local unloadParts: { [string]: BasePart } = {}
 local function buildLoadParts()
 	local r = workspace:FindFirstChild("Restaurant")
 	if not r then
@@ -377,6 +395,17 @@ local function buildLoadParts()
 			p:SetAttribute("PromptOn", false)
 			CollectionService:AddTag(p, "Station")
 			loadParts[meat] = p
+			local u = part(f, "Unload_" .. meat, Vector3.new(1.6, 1.4, 1.6), CFrame.new(x, 4.4, -17.2), Color3.new(1, 1, 1), nil, { Transparency = 1, CanCollide = false, CanQuery = false })
+			u:SetAttribute("Station", "spit_unload")
+			u:SetAttribute("Item", meat)
+			u:SetAttribute("PromptKey", "F")
+			u:SetAttribute("PromptDe", "Spieß abnehmen")
+			u:SetAttribute("PromptEn", "Take the cone off")
+			u:SetAttribute("PromptObj", IngredientData.Meat[meat].icon)
+			u:SetAttribute("PromptHold", 1)
+			u:SetAttribute("PromptOn", false)
+			CollectionService:AddTag(u, "Station")
+			unloadParts[meat] = u
 		end
 	end
 end
@@ -389,7 +418,7 @@ local function attachCarry(char: Model, meat: string): Model?
 	if not torso or not torso:IsA("BasePart") then
 		return nil
 	end
-	local m = cone(char, meat, torso.CFrame * CFrame.new(0, -1.2, -1.3), 0.7)
+	local m = cone(workspace:FindFirstChild("Restaurant") or workspace, meat, torso.CFrame * CFrame.new(0, -1.25, -1.45), 0.7)
 	m.Name = "CarriedCone"
 	for _, p in ipairs(m:GetDescendants()) do
 		if p:IsA("BasePart") then
@@ -451,6 +480,8 @@ local function dropCarry(player: Player, giveBack: boolean)
 	if player.Character then
 		player.Character:SetAttribute("CarryMeat", nil)
 	end
+	player:SetAttribute("Carry", nil)
+	player:SetAttribute("CarrySpeed", nil)
 	if giveBack then
 		ColdRoomService.ReturnPack(c.pack)
 	end
@@ -458,7 +489,7 @@ local function dropCarry(player: Player, giveBack: boolean)
 end
 
 local function onTake(player: Player, part: BasePart)
-	if carried[player] then
+	if carried[player] or player:GetAttribute("Carry") then
 		Net.Notify(player, "n_carry_full", nil, "warn")
 		return
 	end
@@ -489,6 +520,8 @@ local function onTake(player: Player, part: BasePart)
 	end
 	carried[player] = { pack = p, model = m }
 	char:SetAttribute("CarryMeat", MEAT_OF[p.id])
+	player:SetAttribute("Carry", p.id)
+	player:SetAttribute("CarrySpeed", 0.75)
 	Net.Sound(player, "add")
 	Net.Notify(player, "n_cone_taken", { item = IngredientData.Meat[MEAT_OF[p.id]].name }, "info")
 	refreshShelves()
@@ -526,6 +559,56 @@ local function onLoad(player: Player, part: BasePart)
 	dropCarry(player, false)
 	loadSpit(meat, pack)
 	Net.Notify(player, "n_cone_loaded", { item = IngredientData.Meat[meat].name }, "success")
+end
+
+-- put a carried cone back into the cold room
+function ColdRoomService.IsCarrying(player: Player): boolean
+	return carried[player] ~= nil
+end
+function ColdRoomService.ReturnCarried(player: Player): boolean
+	local c = carried[player]
+	if not c then
+		return false
+	end
+	dropCarry(player, true)
+	Net.Sound(nil, "add", INSIDE)
+	Net.Notify(player, "❄️ Fleischspieß zurück im Kühlraum", nil, "success")
+	return true
+end
+
+-- take what is left on a spit off the grill and carry it (back to the cold room or another spit)
+local function onUnload(player: Player, part: BasePart)
+	local meat = part:GetAttribute("Item")
+	local id = "meat_" .. tostring(meat)
+	if carried[player] or player:GetAttribute("Carry") then
+		Net.Notify(player, "n_carry_full", nil, "warn")
+		return
+	end
+	local n = RestaurantService.GetStock(id)
+	if n <= 0 or not IngredientData.Stock[id] then
+		Net.Notify(player, "Auf dem Spieß ist kein Fleisch mehr", nil, "warn")
+		return
+	end
+	local char = player.Character
+	if not char or not RestaurantService.UseStock(id, n) then
+		return
+	end
+	nextUid += 1
+	local p = { id = id, n = n, day = RestaurantService.GetDay() - 1, uid = nextUid } -- already rested
+	local m = attachCarry(char, meat)
+	if not m then
+		RestaurantService.AddStock(id, n)
+		return
+	end
+	carried[player] = { pack = p, model = m }
+	char:SetAttribute("CarryMeat", meat)
+	player:SetAttribute("Carry", id)
+	player:SetAttribute("CarrySpeed", 0.75)
+	FoodPreparationService.UpdateSpitVisual(meat)
+	FoodPreparationService.PushSpits()
+	Net.Sound(nil, "add", part.Position)
+	Net.Notify(player, ("🥩 Spieß abgenommen (%d Portionen) – zurück in den Kühlraum oder wieder aufstecken"):format(n), nil, "info")
+	refreshLoadPrompts()
 end
 
 ---------------------------------------------------------------------------
@@ -606,6 +689,15 @@ function ColdRoomService.Init()
 	end
 	FoodPreparationService.ExternalActions.coldmeat = onTake
 	FoodPreparationService.ExternalActions.spit_load = onLoad
+	FoodPreparationService.ExternalActions.spit_unload = onUnload
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			for meat, u in pairs(unloadParts) do
+				u:SetAttribute("PromptOn", spitPresent(meat) and RestaurantService.GetStock("meat_" .. meat) > 0)
+			end
+		end
+	end)
 	RestaurantService.OwnerChanged:Connect(function()
 		for pl in pairs(carried) do
 			dropCarry(pl, true)
