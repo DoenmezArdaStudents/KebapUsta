@@ -114,7 +114,17 @@ local function compute(): (number?, string?, Instance?)
 	if inBowl > 0 and inMeal < need then
 		return 5, "tut_5", board(myBoard)
 	end
-	for _, e in ipairs(OrderLogic.Checklist(item, meal)) do
+	local list = OrderLogic.Checklist(item, meal)
+	-- a sauce bottle in the hand: squeeze it on at the board, then back into its dispenser
+	if ps.sauce then
+		for _, e in ipairs(list) do
+			if e.key == "sauce:" .. ps.sauce and e.state ~= "ok" then
+				return 5, "tut_5", board(myBoard)
+			end
+		end
+		return 5, "tut_5", station("sauce", ps.sauce)
+	end
+	for _, e in ipairs(list) do
 		if (string.sub(e.key, 1, 4) == "veg:" or string.sub(e.key, 1, 6) == "sauce:") and e.state ~= "ok" then
 			local kind = string.sub(e.key, 1, 4) == "veg:" and "veg" or "sauce"
 			return 5, "tut_5", station(kind, e.data.id)

@@ -79,7 +79,7 @@ end
 
 local function handsBusyNoTray(): boolean
 	local ps = State.player
-	local held = ps ~= nil and (heldMeal() or ps.bowlAt == "hand" or ps.lid == true)
+	local held = ps ~= nil and (heldMeal() or ps.bowlAt == "hand" or ps.lid == true or ps.sauce ~= nil)
 	return held or game:GetService("Players").LocalPlayer:GetAttribute("Carry") ~= nil
 end
 
@@ -150,14 +150,32 @@ local function refreshStation(e: Entry)
 		prompt.ActionText = L("p_heat")
 		prompt.ObjectText = (State.lang == "de" and "Hitze: " or "Heat: ") .. (heat == "high" and "🔥🔥" or "🔥")
 		prompt.Enabled = true
-	elseif kind == "veg" or kind == "sauce" or kind == "cheese" then
+	elseif kind == "sauce" then
+		-- the bottle itself: take it (to the board) / put it back; with the bread in your hand: pump
+		local def = IngredientData.Find(item)
+		local count = m and (m.sauces[item] or 0) or 0
+		local more = count > 0 and string.format(" (%d→%d)", count, count + 1) or ""
+		prompt.ObjectText = (def and def.name[State.lang] or item) .. stockText(def and def.stock or item)
+		local heldBy = part:GetAttribute("HeldBy")
+		if ps.sauce == item then
+			prompt.ActionText = L("p_sauce_back")
+			prompt.Enabled = true
+		elseif heldBy ~= nil then
+			prompt.ActionText = L("p_sauce_taken")
+			prompt.Enabled = false
+		elseif heldMeal() then
+			prompt.ActionText = L("p_sauce_pump") .. more
+			prompt.Enabled = canAdd()
+		else
+			prompt.ActionText = L("p_take")
+			prompt.Enabled = not handsBusy()
+		end
+	elseif kind == "veg" or kind == "cheese" then
 		local def = IngredientData.Find(item)
 		local count = 0
 		if m then
 			if kind == "veg" then
 				count = m.veg[item] or 0
-			elseif kind == "sauce" then
-				count = m.sauces[item] or 0
 			else
 				count = m.cheese
 			end
@@ -193,6 +211,11 @@ local function refreshStation(e: Entry)
 				e2 = { "bowl_down", L("p_bowl_down"), "🥩" }
 			else
 				e1 = { "bowl_down", L("p_bowl_down"), "🥩" }
+			end
+		elseif free and ps.sauce then
+			if open then
+				local n = m.sauces[ps.sauce] or 0
+				e1 = { "sauce_on", L("p_sauce_on") .. (n > 0 and string.format(" (%d→%d)", n, n + 1) or ""), "🧴" }
 			end
 		elseif free and ps.lid then
 			if open and m.bread == "classic" then
@@ -314,6 +337,11 @@ local function addStation(part: Instance)
 		e.prompt2 = makePrompt(part, Enum.KeyCode.R, Enum.KeyCode.ButtonY)
 		;(e.prompt2 :: ProximityPrompt).UIOffset = Vector2.new(0, 80)
 		part:GetAttributeChangedSignal("User"):Connect(function()
+			refreshStation(e)
+		end)
+	elseif kind == "sauce" then
+		-- the bottle was taken / put back by someone
+		part:GetAttributeChangedSignal("HeldBy"):Connect(function()
 			refreshStation(e)
 		end)
 	end

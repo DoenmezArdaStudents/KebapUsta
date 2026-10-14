@@ -7,8 +7,11 @@
 -- ColdRoomService). The order of work:
 --   1. spit → carved portions go into the meat pan in your hands (Server/MeatCuttingService)
 --   2. board → put the pan down; bread station → the bread is in your hand → put it on the board
---   3. board → the meat goes from the pan onto the bread; vegetables, cheese and sauces are added
---      at their stations to your bread (on the board or in your hand)
+--   3. board → the meat goes from the pan onto the bread; vegetables and cheese are added at their
+--      stations to your bread (on the board or in your hand)
+--   3b. sauces are bottles: take one from its dispenser (it is gone there – nobody else can use it
+--      meanwhile), squeeze it onto the bread at the board and put it back. With the bread in your
+--      hand you pump the sauce straight from the dispenser instead.
 --   4. a classic bread is closed with its top half, fetched separately from the bread station
 --   5. grill: pick the bread up, put it in, take it out into your hands again
 --   6. packing puts the meal on your tray at the front of the board; pick the tray up to serve
@@ -38,8 +41,10 @@ type PrepState = {
 	bowl: { { meat: string, q: number } }?, -- carved portions in the meat pan
 	bowlAt: any, -- "hand" | board index | nil
 	lid: boolean?, -- the top half of a classic bread is in the hands
+	sauce: string?, -- sauce bottle in the hand (taken from its dispenser)
 	bowlModel: Model?,
 	lidModel: Model?,
+	sauceModel: Model?,
 	lastCut: number,
 	lastAction: number,
 	model: Model?,
@@ -47,6 +52,7 @@ type PrepState = {
 }
 
 local states: { [Player]: PrepState } = {}
+local sauceHolder: { [string]: Player } = {} -- whose hand each dispenser's bottle is in
 local grillOwner: { [number]: Player } = {}
 local spits: { [string]: { heat: string, doneness: number, model: Instance? } } = {
 	chicken = { heat = "low", doneness = 0.3 },
@@ -91,7 +97,7 @@ end
 
 -- everything but the tray (drinks go on a carried tray)
 local function handsBusyNoTray(player: Player, s: PrepState): boolean
-	return mealInHand(s) or s.bowlAt == "hand" or s.lid == true or player:GetAttribute("Carry") ~= nil
+	return mealInHand(s) or s.bowlAt == "hand" or s.lid == true or s.sauce ~= nil or player:GetAttribute("Carry") ~= nil
 end
 
 local function handsBusy(player: Player, s: PrepState): boolean
@@ -664,6 +670,87 @@ local function refreshBowlVisual(player: Player)
 	s.bowlModel = m
 end
 
+-- arm animation on every client (Client/HandUI): "sauce" = squeezing the held bottle over the bread,
+-- "pump" = pressing the dispenser onto the bread held in the other hand
+local function handAct(player: Player, kind: string)
+	local t = workspace:GetServerTimeNow()
+	player:SetAttribute("HandAct", kind)
+	player:SetAttribute("HandT", t)
+	task.delay(1.1, function()
+		if player:GetAttribute("HandT") == t then
+			player:SetAttribute("HandAct", nil)
+		end
+	end)
+end
+
+local HOLD_SAUCE = CFrame.new(0.85, 0.3, -1.25)
+local SQUEEZE_SAUCE = CFrame.new(0.3, 0.75, -1.75) * CFrame.Angles(math.rad(180), 0, math.rad(12))
+
+-- the sauce bottle in the right hand; upside down above the bread while squeezing
+local function refreshSauceVisual(player: Player, squeezing: boolean?)
+	local s = getState(player)
+	player:SetAttribute("HoldSauce", s.sauce)
+	if s.sauceModel then
+		s.sauceModel:Destroy()
+		s.sauceModel = nil
+	end
+	local root = s.sauce and rootPart(player)
+	if not root or not s.sauce then
+		return
+	end
+	local def = IngredientData.Sauce[s.sauce]
+	local col = def and def.color or Color3.fromRGB(240, 240, 230)
+	local m = Instance.new("Model")
+	m.Name = "Sauce_" .. player.UserId
+	local cf = root.CFrame * (squeezing and SQUEEZE_SAUCE or HOLD_SAUCE)
+	local vertical = CFrame.Angles(0, 0, math.rad(90))
+	bit(m, Vector3.new(0.85, 0.42, 0.42), cf * vertical, col, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	bit(m, Vector3.new(0.14, 0.44, 0.44), cf * CFrame.new(0, 0.48, 0) * vertical, Color3.fromRGB(235, 235, 235), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	bit(m, Vector3.new(0.26, 0.1, 0.1), cf * CFrame.new(0, 0.66, 0) * vertical, Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	bit(m, Vector3.new(0.3, 0.12, 0.43), cf * CFrame.new(0, -0.05, -0.01), Color3.fromRGB(250, 250, 245), Enum.Material.Fabric)
+	weldTo(m, root)
+	m.Parent = mealFolder
+	s.sauceModel = m
+end
+
+-- the dispenser shows its bottle only while nobody holds it
+local function setDispenser(id: string, holder: Player?)
+	sauceHolder[id] = holder
+	local p = findStation("sauce", "Item", id)
+	if not p then
+		return
+	end
+	p:SetAttribute("HeldBy", holder and holder.UserId or nil)
+	local unit = p.Parent
+	local parts = (unit and unit:IsA("Model")) and unit:GetDescendants() or { p }
+	for _, d in ipairs(parts) do
+		if d:IsA("BasePart") then
+			if holder then
+				if d:GetAttribute("BaseT") == nil then
+					d:SetAttribute("BaseT", d.Transparency)
+				end
+				d.Transparency = 1
+			elseif d:GetAttribute("BaseT") ~= nil then
+				d.Transparency = d:GetAttribute("BaseT")
+				d:SetAttribute("BaseT", nil)
+			end
+		end
+	end
+end
+
+-- put a held bottle back into its dispenser (also when the player dies or leaves)
+local function returnSauce(player: Player)
+	local s = states[player]
+	if not s or not s.sauce then
+		return
+	end
+	if sauceHolder[s.sauce] == player then
+		setDispenser(s.sauce, nil)
+	end
+	s.sauce = nil
+	refreshSauceVisual(player)
+end
+
 -- the top half of a classic bread, carried to the board to close it
 local function refreshLidVisual(player: Player)
 	local s = getState(player)
@@ -971,18 +1058,18 @@ function Actions.spit_heat(player: Player, part: BasePart)
 	FoodPreparationService.PushSpits()
 end
 
-local function addIngredient(player: Player, category: string, id: string, stockId: string)
+local function addIngredient(player: Player, category: string, id: string, stockId: string): boolean
 	local meal = requireOpenMeal(player)
 	if not meal then
-		return
+		return false
 	end
 	local current = (category == "cheese") and meal.cheese or (meal[category][id] or 0)
 	if current >= Config.Prep.MaxIngredientPortions then
 		notify(player, "n_too_much")
-		return
+		return false
 	end
 	if not useStock(player, stockId) then
-		return
+		return false
 	end
 	if category == "cheese" then
 		meal.cheese += 1
@@ -996,6 +1083,7 @@ local function addIngredient(player: Player, category: string, id: string, stock
 	Net.Sound(player, category == "sauces" and "sauce" or "add")
 	refreshMealVisual(player)
 	push(player)
+	return true
 end
 
 function Actions.veg(player: Player, part: BasePart)
@@ -1010,12 +1098,40 @@ function Actions.cheese(player: Player, _part: BasePart)
 	addIngredient(player, "cheese", "cheese", "cheese")
 end
 
+-- The dispenser: take its bottle / put it back; with the bread in your hand, pump sauce onto it.
 function Actions.sauce(player: Player, part: BasePart)
+	local s = getState(player)
 	local id = part:GetAttribute("Item")
 	local def = IngredientData.Sauce[id]
-	if def then
-		addIngredient(player, "sauces", id, def.stock)
+	if not def then
+		return
 	end
+	if s.sauce == id then
+		returnSauce(player)
+		Net.Sound(player, "click")
+		push(player)
+		return
+	end
+	local holder = sauceHolder[id]
+	if holder and holder ~= player then
+		notify(player, "n_sauce_taken", { name = holder.DisplayName })
+		return
+	end
+	if mealInHand(s) then
+		if addIngredient(player, "sauces", id, def.stock) then
+			handAct(player, "pump")
+		end
+		return
+	end
+	if handsBusy(player, s) then
+		notify(player, "n_hands_full")
+		return
+	end
+	s.sauce = id
+	setDispenser(id, player)
+	refreshSauceVisual(player)
+	Net.Sound(player, "add")
+	push(player)
 end
 
 -- The board: put down / pick up the bread, the meat pan and the tray; the meat goes from the pan onto
@@ -1108,6 +1224,22 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		end
 		Net.Sound(player, "add")
 		refreshBowlVisual(player)
+	elseif action == "sauce_on" then
+		-- squeeze the bottle in your hand onto the bread on the board
+		if not s.sauce or not mealOnBoard(s, i) or s.meal.closed then
+			return
+		end
+		local id = s.sauce
+		if addIngredient(player, "sauces", id, IngredientData.Sauce[id].stock) then
+			handAct(player, "sauce")
+			refreshSauceVisual(player, true)
+			task.delay(1.1, function()
+				if states[player] == s and s.sauce == id then
+					refreshSauceVisual(player)
+				end
+			end)
+		end
+		return
 	elseif action == "close" then
 		if not mealOnBoard(s, i) or s.meal.closed then
 			return
@@ -1217,6 +1349,9 @@ function Actions.trash(player: Player, _part: BasePart)
 	elseif s.lid then
 		s.lid = nil
 		refreshLidVisual(player)
+	elseif s.sauce then
+		notify(player, "n_sauce_back")
+		return
 	elseif s.trayAt == "hand" and #s.tray > 0 then
 		table.remove(s.tray, #s.tray)
 		refreshTrayVisual(player)
@@ -1440,12 +1575,14 @@ function FoodPreparationService.Init()
 		st.bowl = s.bowl
 		st.bowlAt = s.bowlAt
 		st.lid = s.lid
+		st.sauce = s.sauce
 		st.trayCap = trayCapacity()
 	end)
 
 	Players.PlayerRemoving:Connect(function(p)
 		local s = states[p]
 		if s then
+			returnSauce(p)
 			releasePlace(p)
 			if s.model then
 				s.model:Destroy()
@@ -1483,6 +1620,9 @@ function FoodPreparationService.Init()
 				s.lidModel:Destroy()
 				s.lidModel = nil
 			end
+			-- a bottle goes back into its dispenser
+			returnSauce(p)
+			push(p)
 		end)
 		p.CharacterAdded:Connect(function()
 			task.wait(0.5)

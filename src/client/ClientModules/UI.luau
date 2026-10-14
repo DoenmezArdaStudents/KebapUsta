@@ -376,6 +376,10 @@ local function updateMeal()
 	else
 		refs.mealSub.Text = L("meal_empty")
 	end
+	-- a sauce bottle in the hand
+	if ps.sauce then
+		refs.mealSub.Text = string.format("🧴 %s ✋  ·  %s", ing(ps.sauce), refs.mealSub.Text)
+	end
 	-- the meat pan: carved portions waiting to go on the bread
 	if ps.bowl and #ps.bowl > 0 then
 		local where = ps.bowlAt == "hand" and "✋" or "🔪"

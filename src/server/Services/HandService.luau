@@ -157,7 +157,8 @@ local function signature(player: Player, kind: string): string
 	return ok and json or tostring(os.clock())
 end
 
-local SHOWS = { sauce = true, veg = true, cheese = true, drink = true, grill = true, board = true }
+-- sauces are carried bottles with their own squeeze / pump animation (Server/FoodPreparationService)
+local SHOWS = { veg = true, cheese = true, drink = true, grill = true, board = true }
 
 function HandService.Init()
 	folder = Instance.new("Folder")
