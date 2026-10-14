@@ -86,11 +86,14 @@ local function makeView()
 			d.Anchored = true
 		end
 	end
-	-- fist + cuff so the item does not float in the air
+	-- fist + cuff so the item does not float in the air; placed at the item's grip (Server/HandService),
+	-- the live hand may already have moved on with the arm animation
+	local grip = m:FindFirstChild("Grip") :: BasePart?
+	local at = grip and grip.CFrame or hand.CFrame
 	local fist = Instance.new("Part")
 	fist.Name = "Fist"
 	fist.Size = Vector3.new(0.42, 0.5, 0.42)
-	fist.CFrame = hand.CFrame
+	fist.CFrame = at
 	fist.Color = hand.Color
 	fist.Anchored = true
 	fist.CanCollide = false
@@ -99,7 +102,7 @@ local function makeView()
 	local cuff = fist:Clone()
 	cuff.Name = "Cuff"
 	cuff.Size = Vector3.new(0.5, 0.35, 0.5)
-	cuff.CFrame = hand.CFrame * CFrame.new(0, 0.4, 0)
+	cuff.CFrame = at * CFrame.new(0, 0.4, 0)
 	cuff.Color = Color3.fromRGB(245, 245, 245)
 	cuff.Parent = m
 	m.PrimaryPart = fist
@@ -125,8 +128,19 @@ local function viewStep()
 	local cam = workspace.CurrentCamera
 	local inK = math.clamp(math.min(t / 0.15, (1.1 - t) / 0.25), 0, 1)
 	local bob = math.sin(t * 10) * 0.04
-	-- palm faces the screen centre, item pointing forward
-	local cf = cam.CFrame * CFrame.new(1.25, -1.75 + inK * 0.5 + bob, -3.2) * CFrame.Angles(math.rad(80), math.rad(-15), math.rad(10))
+	local cf
+	local act = lp:GetAttribute("HandAct")
+	if act == "sauce" or act == "veg" or act == "cheese" then
+		-- onto the bread: the fist comes in from the right above the middle of the view, the bottle
+		-- hangs upside down (nozzle down) / the portion drops from below the fist; squeezing pulses
+		local squeeze = act == "sauce" and math.max(0, math.sin(t * 16)) * 0.06 or 0
+		cf = cam.CFrame
+			* CFrame.new(0.2 + (1 - inK) * 1.2, 1.2 - (1 - inK) * 0.9 + squeeze, -2.9)
+			* CFrame.Angles(math.rad(18), math.rad(10), math.rad(6))
+	else
+		-- palm faces the screen centre, item pointing forward
+		cf = cam.CFrame * CFrame.new(1.25, -1.75 + inK * 0.5 + bob, -3.2) * CFrame.Angles(math.rad(80), math.rad(-15), math.rad(10))
+	end
 	view:PivotTo(cf)
 end
 

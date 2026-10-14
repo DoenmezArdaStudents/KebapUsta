@@ -120,6 +120,13 @@ function HandService.Flash(player: Player, kind: string, item: any, secs: number
 		return
 	end
 	m.Name = "Hand_" .. player.UserId
+	-- where the fist is relative to the item: the first-person view model (Client/HandUI) puts its fist here
+	local grip = Instance.new("Part")
+	grip.Name = "Grip"
+	grip.Size = Vector3.new(0.2, 0.2, 0.2)
+	grip.Transparency = 1
+	grip.CFrame = hand.CFrame
+	grip.Parent = m
 	for _, p in ipairs(m:GetDescendants()) do
 		if p:IsA("BasePart") then
 			p.Anchored = false
