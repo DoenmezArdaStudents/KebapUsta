@@ -1,8 +1,8 @@
 -- Visible items in the player's hand: every successful kitchen action briefly puts the real item
 -- (bread, a lettuce leaf, a sauce bottle, a drink …) into the right hand, welded to RightHand so
 -- everyone sees it. The player attributes HandAct/HandT drive the arm pose and the first-person
--- view model on the clients (Client/HandUI). The carried tray ("Tray") and the held bread ("HoldMeal",
--- Server/FoodPreparationService) flag a held pose; the bread itself is a carried model, no flash.
+-- view model on the clients (Client/HandUI). The carried tray ("Tray") and the held bread, meat pan or
+-- bread top ("Hold", Server/FoodPreparationService) flag a held pose; those are carried models, no flash.
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -148,11 +148,12 @@ function HandService.Flash(player: Player, kind: string, item: any, secs: number
 	end)
 end
 
--- snapshot of what an action can change: meal contents, tray, grill (not where the meal lies: putting
--- it down or picking it up is no kitchen action)
-local function signature(player: Player): string
+-- snapshot of what an action can change: meal contents, tray, grill (not where things lie: putting
+-- them down or picking them up is no kitchen action). At the board only closing/packing shows foil.
+local function signature(player: Player, kind: string): string
 	local s = FoodPreparationService.GetState(player)
-	local ok, json = pcall(HttpService.JSONEncode, HttpService, { s.meal, #s.tray, s.grillStart ~= nil })
+	local snap = kind == "board" and { s.meal and s.meal.closed, #s.tray } or { s.meal, #s.tray, s.grillStart ~= nil }
+	local ok, json = pcall(HttpService.JSONEncode, HttpService, snap)
 	return ok and json or tostring(os.clock())
 end
 
@@ -164,10 +165,10 @@ function HandService.Init()
 	folder.Parent = workspace
 	-- wrap every kitchen action: if it changed something, show the item in the hand
 	FoodPreparationService.BeforeAction = function(player: Player, kind: string)
-		return SHOWS[kind] and signature(player) or nil
+		return SHOWS[kind] and signature(player, kind) or nil
 	end
 	FoodPreparationService.AfterAction = function(player: Player, part: BasePart, kind: string, before: string?)
-		if before and signature(player) ~= before then
+		if before and signature(player, kind) ~= before then
 			HandService.Flash(player, kind, part:GetAttribute("Item"))
 		end
 	end

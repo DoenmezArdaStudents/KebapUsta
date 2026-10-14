@@ -376,6 +376,11 @@ local function updateMeal()
 	else
 		refs.mealSub.Text = L("meal_empty")
 	end
+	-- the meat pan: carved portions waiting to go on the bread
+	if ps.bowl and #ps.bowl > 0 then
+		local where = ps.bowlAt == "hand" and "✋" or "🔪"
+		refs.mealSub.Text = string.format("🥩 %s %d/%d %s  ·  %s", L("bowl_label"), #ps.bowl, Config.Prep.BowlPortions, where, refs.mealSub.Text)
+	end
 	prevChip = nextChip
 	-- tray
 	local parts = {}
@@ -389,7 +394,7 @@ local function updateMeal()
 	end
 	local where = ps.trayAt == "hand" and "✋ " or (type(ps.trayAt) == "number" and "🔪 " or "")
 	refs.tray.Text = string.format("%s%s  <font color='#b0aca8'>%d/%d</font>", where, #parts > 0 and table.concat(parts, " ") or "🍽️", #(ps.tray or {}), ps.trayCap or 2)
-	setMealVisible(meal ~= nil or item ~= nil or #(ps.tray or {}) > 0)
+	setMealVisible(meal ~= nil or item ~= nil or #(ps.tray or {}) > 0 or ps.bowl ~= nil)
 end
 
 ---------------------------------------------------------------------------

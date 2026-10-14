@@ -1,6 +1,6 @@
 -- Hand presentation: arm poses for items in the hand (Server/HandService), the carried tray and the
--- held bread (Server/FoodPreparationService), applied to every player's joints; plus a first-person
--- view model of the flashed item for yourself.
+-- held bread, meat pan or bread top (Server/FoodPreparationService), applied to every player's joints;
+-- plus a first-person view model of the flashed item for yourself.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -36,7 +36,7 @@ local function poseStep(dt: number)
 			continue
 		end
 		-- tray or bread held with both hands (the carving pose has its own left hand)
-		local holding = (pl:GetAttribute("Tray") or pl:GetAttribute("HoldMeal")) and not char:GetAttribute("Cutting")
+		local holding = (pl:GetAttribute("Tray") or pl:GetAttribute("Hold")) and not char:GetAttribute("Cutting")
 		local tw = math.clamp((trayW[char] or 0) + (holding and dt * 6 or -dt * 6), 0, 1)
 		trayW[char] = tw > 0 and tw or nil
 		if tw > 0 then

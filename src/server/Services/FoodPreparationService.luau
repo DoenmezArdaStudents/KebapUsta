@@ -2,14 +2,17 @@
 -- packing and the tray. Every ingredient is tracked exactly and shown visually.
 --
 -- Hands (issue #3): nothing teleports. Whatever changes place is carried, and a player has one pair
--- of hands: the meal in progress (location "hand"), the tray (trayAt "hand") or a box / meat cone
--- (attribute Carry, Server/LogisticsService + ColdRoomService) – never two at once.
---   * bread station → the bread is in your hand
---   * spit, vegetables, cheese, sauces → only add to the bread you are holding
---   * grill → put the held bread in, take it out into your hands again
---   * board → put the bread down / pick it up; closing and packing happen on the board
---   * packing puts the meal on your tray; a tray that is not carried stands at the front of a board
---   * drinks go on the tray in your hands; only a carried tray can be served, only carried things trashed
+-- of hands for one thing: the bread (location "hand"), the meat pan (bowlAt "hand"), the bread top
+-- (lid), the tray (trayAt "hand") or a box / meat cone (attribute Carry, Server/LogisticsService +
+-- ColdRoomService). The order of work:
+--   1. spit → carved portions go into the meat pan in your hands (Server/MeatCuttingService)
+--   2. board → put the pan down; bread station → the bread is in your hand → put it on the board
+--   3. board → the meat goes from the pan onto the bread; vegetables, cheese and sauces are added
+--      at their stations to your bread (on the board or in your hand)
+--   4. a classic bread is closed with its top half, fetched separately from the bread station
+--   5. grill: pick the bread up, put it in, take it out into your hands again
+--   6. packing puts the meal on your tray at the front of the board; pick the tray up to serve
+-- Drinks go on the tray in your hands; only a carried tray can be served, only carried things trashed.
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
@@ -32,6 +35,11 @@ type PrepState = {
 	grillStart: number?,
 	tray: { any },
 	trayAt: any, -- "hand" | board index | nil (no tray: nothing on it)
+	bowl: { { meat: string, q: number } }?, -- carved portions in the meat pan
+	bowlAt: any, -- "hand" | board index | nil
+	lid: boolean?, -- the top half of a classic bread is in the hands
+	bowlModel: Model?,
+	lidModel: Model?,
 	lastCut: number,
 	lastAction: number,
 	model: Model?,
@@ -81,8 +89,13 @@ local function mealOnBoard(s: PrepState, index: number): boolean
 	return s.meal ~= nil and s.location == "board" and s.board == index
 end
 
+-- everything but the tray (drinks go on a carried tray)
+local function handsBusyNoTray(player: Player, s: PrepState): boolean
+	return mealInHand(s) or s.bowlAt == "hand" or s.lid == true or player:GetAttribute("Carry") ~= nil
+end
+
 local function handsBusy(player: Player, s: PrepState): boolean
-	return mealInHand(s) or s.trayAt == "hand" or player:GetAttribute("Carry") ~= nil
+	return handsBusyNoTray(player, s) or s.trayAt == "hand"
 end
 
 function FoodPreparationService.HandsBusy(player: Player): boolean
@@ -93,12 +106,26 @@ function FoodPreparationService.TrayInHand(player: Player): boolean
 	return getState(player).trayAt == "hand"
 end
 
--- a board is in use while someone's meal or tray stands on it
+-- a board is in use while someone's meal, meat pan or tray stands on it
 local function boardUser(index: number): Player?
 	for p, s in pairs(states) do
-		if mealOnBoard(s, index) or s.trayAt == index then
+		if mealOnBoard(s, index) or s.trayAt == index or s.bowlAt == index then
 			return p
 		end
+	end
+	return nil
+end
+
+-- the board a player's things stand on (they all share one)
+local function myBoard(s: PrepState): number?
+	if s.meal and s.location == "board" then
+		return s.board
+	end
+	if type(s.bowlAt) == "number" then
+		return s.bowlAt
+	end
+	if type(s.trayAt) == "number" then
+		return s.trayAt
 	end
 	return nil
 end
@@ -452,7 +479,11 @@ end
 
 local HOLD_MEAL = CFrame.new(0, 0.15, -1.35) -- held bread, in front of the root (visible in first person)
 local HOLD_TRAY = CFrame.new(0, 0.2, -1.6)
-local TRAY_ON_BOARD = CFrame.new(0, -0.15, 1.68) -- from the board's top centre: the pass towards the guests
+local HOLD_BOWL = CFrame.new(0, 0.1, -1.3)
+-- from the board's top centre: bread on the left, meat pan on the right, tray at the pass to the guests
+local MEAL_ON_BOARD = CFrame.new(-0.45, 0, 0)
+local BOWL_ON_BOARD = CFrame.new(1.02, 0, 0.1)
+local TRAY_ON_BOARD = CFrame.new(0, -0.15, 1.68)
 
 local function rootPart(player: Player): BasePart?
 	local char = player.Character
@@ -473,9 +504,17 @@ local function weldTo(m: Model, root: BasePart)
 	end
 end
 
+-- held pose on the clients (Client/HandUI)
+local function updateHold(player: Player, s: PrepState)
+	local hold = mealInHand(s) or s.bowlAt == "hand" or s.lid == true
+	if player:GetAttribute("Hold") ~= (hold or nil) then
+		player:SetAttribute("Hold", hold or nil)
+	end
+end
+
 local function refreshMealVisual(player: Player)
 	local s = getState(player)
-	player:SetAttribute("HoldMeal", mealInHand(s) or nil)
+	updateHold(player, s)
 	if s.model then
 		s.model:Destroy()
 		s.model = nil
@@ -487,7 +526,8 @@ local function refreshMealVisual(player: Player)
 	if s.location == "grill" and s.grillSlot then
 		cf = grillCFrame(s.grillSlot)
 	elseif s.location == "board" and s.board then
-		cf = boardCFrame(s.board)
+		local b = boardCFrame(s.board)
+		cf = b and b * MEAL_ON_BOARD
 	elseif s.location == "hand" then
 		root = rootPart(player)
 		cf = root and root.CFrame * HOLD_MEAL
@@ -549,6 +589,107 @@ local function refreshTrayVisual(player: Player)
 end
 FoodPreparationService.RefreshTray = refreshTrayVisual
 
+local function meatTint(meat: string, q: number): Color3
+	local tint = MEAT_TINT[meat] or WHITE
+	if q < 0.5 then
+		return Color3.fromRGB(70, 50, 40)
+	elseif q < 0.8 then
+		return tint:Lerp(Color3.fromRGB(255, 205, 190), 0.35)
+	end
+	return tint
+end
+
+-- stainless gastro pan with the carved meat piled inside
+local function buildBowl(items: { any }, cf: CFrame): Model
+	local m = Instance.new("Model")
+	m.Name = "MeatPan"
+	local steel = Color3.fromRGB(205, 209, 214)
+	local w, d, h, t = 0.86, 0.66, 0.3, 0.035
+	local function steelBit(size: Vector3, at: CFrame)
+		local p = bit(m, size, cf * at, steel, Enum.Material.Metal)
+		p.Reflectance = 0.25
+		return p
+	end
+	steelBit(Vector3.new(w - 0.06, t, d - 0.06), CFrame.new(0, t / 2, 0))
+	for _, sx in ipairs({ -1, 1 }) do
+		-- slightly flared walls and a rolled rim like a real GN pan
+		steelBit(Vector3.new(t, h, d), CFrame.new(sx * (w / 2 - t / 2), h / 2, 0) * CFrame.Angles(0, 0, math.rad(-sx * 4)))
+		steelBit(Vector3.new(w, h, t), CFrame.new(0, h / 2, sx * (d / 2 - t / 2)) * CFrame.Angles(math.rad(sx * 4), 0, 0))
+		steelBit(Vector3.new(0.07, 0.03, d + 0.1), CFrame.new(sx * (w / 2 + 0.02), h, 0))
+		steelBit(Vector3.new(w + 0.1, 0.03, 0.07), CFrame.new(0, h, sx * (d / 2 + 0.02)))
+	end
+	local idx = 0
+	for k, it in ipairs(items) do
+		local layer = t + 0.05 + math.min(k - 1, 6) * 0.03
+		for _ = 1, 4 do
+			idx += 1
+			local x, z, rot = scatter(7, idx, w - 0.3, d - 0.3)
+			local at = cf * CFrame.new(x, layer, z) * CFrame.Angles(0, rot * 2, (idx % 3 - 1) * 0.3)
+			if not piece(m, "MeatShaving", at, 0.85, meatTint(it.meat, it.q)) then
+				bit(m, Vector3.new(0.22, 0.08, 0.14), at, meatColor(it.q, it.meat), Enum.Material.Sand)
+			end
+		end
+	end
+	m.Parent = mealFolder
+	return m
+end
+
+-- the meat pan: in the hands or standing on the right of a board
+local function refreshBowlVisual(player: Player)
+	local s = getState(player)
+	if s.bowl == nil then
+		s.bowlAt = nil
+	end
+	updateHold(player, s)
+	if s.bowlModel then
+		s.bowlModel:Destroy()
+		s.bowlModel = nil
+	end
+	local root, cf
+	if s.bowlAt == "hand" then
+		root = rootPart(player)
+		cf = root and root.CFrame * HOLD_BOWL
+	elseif type(s.bowlAt) == "number" then
+		local b = boardCFrame(s.bowlAt)
+		cf = b and b * BOWL_ON_BOARD
+	end
+	if not cf or not s.bowl then
+		return
+	end
+	local m = buildBowl(s.bowl, cf)
+	m.Name = "MeatPan_" .. player.UserId
+	if root then
+		weldTo(m, root)
+	end
+	s.bowlModel = m
+end
+
+-- the top half of a classic bread, carried to the board to close it
+local function refreshLidVisual(player: Player)
+	local s = getState(player)
+	updateHold(player, s)
+	if s.lidModel then
+		s.lidModel:Destroy()
+		s.lidModel = nil
+	end
+	local root = s.lid and rootPart(player)
+	if not root then
+		return
+	end
+	local m = Instance.new("Model")
+	m.Name = "BreadTop_" .. player.UserId
+	local cf = root.CFrame * HOLD_MEAL * CFrame.new(0, 0.2, 0)
+	if not piece(m, "BreadTop", cf, 0.55, nil) then
+		local p = bit(m, Vector3.new(1.05, 0.2, 0.66), cf, IngredientData.Bread.classic.color, Enum.Material.Sand)
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = p
+	end
+	weldTo(m, root)
+	m.Parent = mealFolder
+	s.lidModel = m
+end
+
 ---------------------------------------------------------------------------
 -- State publishing
 ---------------------------------------------------------------------------
@@ -581,6 +722,10 @@ function FoodPreparationService.ClearMeal(player: Player)
 	local s = getState(player)
 	s.meal = nil
 	releasePlace(player)
+	if s.lid then
+		s.lid = nil
+		refreshLidVisual(player)
+	end
 	refreshMealVisual(player)
 	push(player)
 end
@@ -615,10 +760,6 @@ local function requireOpenMeal(player: Player): any?
 		notify(player, "n_in_grill")
 		return nil
 	end
-	if s.location ~= "hand" then
-		notify(player, "n_meal_not_in_hand")
-		return nil
-	end
 	if s.meal.closed then
 		notify(player, "n_closed_meal")
 		return nil
@@ -643,6 +784,18 @@ function Actions.bread(player: Player, part: BasePart)
 		return
 	end
 	if s.meal then
+		-- the top half of a classic bread is fetched on its own, once everything is on the bottom half
+		if breadId == "classic" and s.meal.bread == "classic" and not s.meal.closed and not s.lid then
+			if handsBusy(player, s) then
+				notify(player, "n_hands_full")
+				return
+			end
+			s.lid = true
+			Net.Sound(player, "add")
+			refreshLidVisual(player)
+			push(player)
+			return
+		end
 		notify(player, "n_have_meal")
 		return
 	end
@@ -739,10 +892,64 @@ FoodPreparationService.Spits = spits
 FoodPreparationService.CutQuality = cutQuality
 function FoodPreparationService.OpenMeal(player: Player): any?
 	local s = getState(player)
-	if not s.meal or s.meal.closed or s.location ~= "hand" then
+	if not s.meal or s.meal.closed or s.location == "grill" then
 		return nil
 	end
 	return s.meal
+end
+
+-- The meat pan carved portions go into: the one in the hands, or a new one (free hands needed).
+-- create = false only checks (and notifies why not).
+function FoodPreparationService.CutBowl(player: Player, create: boolean): { any }?
+	local s = getState(player)
+	if s.bowlAt == "hand" and s.bowl then
+		if #s.bowl >= Config.Prep.BowlPortions then
+			notify(player, "n_bowl_full")
+			return nil
+		end
+		return s.bowl
+	end
+	if type(s.bowlAt) == "number" then
+		notify(player, "n_bowl_on_board")
+		return nil
+	end
+	if handsBusy(player, s) then
+		notify(player, "n_hands_full")
+		return nil
+	end
+	if not create then
+		return {}
+	end
+	s.bowl = {}
+	s.bowlAt = "hand"
+	refreshBowlVisual(player)
+	push(player)
+	return s.bowl
+end
+
+function FoodPreparationService.HeldBowl(player: Player): { any }?
+	local s = getState(player)
+	return s.bowlAt == "hand" and s.bowl or nil
+end
+
+function FoodPreparationService.AddToBowl(player: Player, meat: string, q: number)
+	local s = getState(player)
+	if s.bowlAt ~= "hand" or not s.bowl then
+		return
+	end
+	table.insert(s.bowl, { meat = meat, q = q })
+	refreshBowlVisual(player)
+	push(player)
+end
+
+-- an empty pan is put back when carving ends without a portion
+function FoodPreparationService.DropEmptyBowl(player: Player)
+	local s = getState(player)
+	if s.bowlAt == "hand" and s.bowl and #s.bowl == 0 then
+		s.bowl = nil
+		refreshBowlVisual(player)
+		push(player)
+	end
 end
 function FoodPreparationService.RequireOpenMeal(player: Player): any?
 	return requireOpenMeal(player)
@@ -811,8 +1018,8 @@ function Actions.sauce(player: Player, part: BasePart)
 	end
 end
 
--- The board: put the held bread down / pick it up, close and pack it (both hands needed), and park
--- the tray at its front. One player per board while their meal or tray stands on it.
+-- The board: put down / pick up the bread, the meat pan and the tray; the meat goes from the pan onto
+-- the bread here, the bread is closed and packed here. One player per board while their things are on it.
 function Actions.board(player: Player, part: BasePart, action: any)
 	local s = getState(player)
 	local i = part:GetAttribute("Board")
@@ -824,13 +1031,21 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		notify(player, "n_board_used", { name = user.DisplayName })
 		return
 	end
+	-- all of a player's things stand at one board
+	local function sameBoard(): boolean
+		local b = myBoard(s)
+		if b and b ~= i then
+			notify(player, "n_other_board")
+			return false
+		end
+		return true
+	end
 	if action == "place" then
 		if not mealInHand(s) then
 			notify(player, s.meal and "n_meal_not_in_hand" or "n_need_meal")
 			return
 		end
-		if type(s.trayAt) == "number" and s.trayAt ~= i then
-			notify(player, "n_tray_elsewhere")
+		if not sameBoard() then
 			return
 		end
 		s.location = "board"
@@ -847,12 +1062,64 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		s.location = "hand"
 		s.board = nil
 		Net.Sound(player, "add")
-	elseif action == "close" then
-		if not mealOnBoard(s, i) then
+	elseif action == "bowl_down" then
+		if s.bowlAt ~= "hand" or not sameBoard() then
 			return
 		end
-		if s.meal.closed then
+		s.bowlAt = i
+		Net.Sound(player, "add")
+		refreshBowlVisual(player)
+	elseif action == "bowl_up" then
+		if s.bowlAt ~= i then
 			return
+		end
+		if handsBusy(player, s) then
+			notify(player, "n_hands_full")
+			return
+		end
+		s.bowlAt = "hand"
+		Net.Sound(player, "add")
+		refreshBowlVisual(player)
+	elseif action == "meat_on" then
+		-- from the pan (in the hands or on this board) onto the bread on the board
+		if not mealOnBoard(s, i) or s.meal.closed then
+			return
+		end
+		if not s.bowl or #s.bowl == 0 or (s.bowlAt ~= "hand" and s.bowlAt ~= i) then
+			notify(player, "n_no_meat_bowl")
+			return
+		end
+		local room = Config.Prep.MaxMeatPortions - OrderLogic.MeatTotal(s.meal)
+		if room <= 0 then
+			notify(player, "n_too_much")
+			return
+		end
+		for _ = 1, room do
+			local it = table.remove(s.bowl, 1)
+			if not it then
+				break
+			end
+			s.meal.meat[it.meat] = (s.meal.meat[it.meat] or 0) + 1
+			table.insert(s.meal.meatQuality, it.q)
+			table.insert(s.meal.steps, "meat:" .. it.meat)
+		end
+		if #s.bowl == 0 then
+			s.bowl = nil -- the empty pan goes to the dishes
+		end
+		Net.Sound(player, "add")
+		refreshBowlVisual(player)
+	elseif action == "close" then
+		if not mealOnBoard(s, i) or s.meal.closed then
+			return
+		end
+		-- a classic bread needs its top half (bread station)
+		if s.meal.bread == "classic" then
+			if not s.lid then
+				notify(player, "n_need_lid")
+				return
+			end
+			s.lid = nil
+			refreshLidVisual(player)
 		end
 		s.meal.closed = true
 		table.insert(s.meal.steps, "close")
@@ -865,8 +1132,7 @@ function Actions.board(player: Player, part: BasePart, action: any)
 			notify(player, "n_not_closed")
 			return
 		end
-		if type(s.trayAt) == "number" and s.trayAt ~= i then
-			notify(player, "n_tray_elsewhere")
+		if not sameBoard() then
 			return
 		end
 		if #s.tray >= trayCapacity() then
@@ -883,11 +1149,7 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		Net.Notify(player, "n_meal_to_tray", nil, "success")
 		refreshTrayVisual(player)
 	elseif action == "tray_down" then
-		if s.trayAt ~= "hand" then
-			return
-		end
-		if s.meal and s.location == "board" and s.board ~= i then
-			notify(player, "n_not_your_board")
+		if s.trayAt ~= "hand" or not sameBoard() then
 			return
 		end
 		s.trayAt = i
@@ -919,7 +1181,7 @@ function Actions.drink(player: Player, part: BasePart)
 		return
 	end
 	-- the drink goes on the tray in your hands (a new one if you have none)
-	if mealInHand(s) or player:GetAttribute("Carry") then
+	if handsBusyNoTray(player, s) then
 		notify(player, "n_hands_full")
 		return
 	end
@@ -948,11 +1210,18 @@ function Actions.trash(player: Player, _part: BasePart)
 	if mealInHand(s) then
 		FoodPreparationService.ClearMeal(player)
 		Net.Notify(player, "n_discarded", nil, "info")
+	elseif s.bowlAt == "hand" then
+		s.bowl = nil
+		refreshBowlVisual(player)
+		Net.Notify(player, "n_discarded", nil, "info")
+	elseif s.lid then
+		s.lid = nil
+		refreshLidVisual(player)
 	elseif s.trayAt == "hand" and #s.tray > 0 then
 		table.remove(s.tray, #s.tray)
 		refreshTrayVisual(player)
 		Net.Notify(player, "n_discarded", nil, "info")
-	elseif s.meal or #s.tray > 0 then
+	elseif s.meal or s.bowl or #s.tray > 0 then
 		notify(player, "n_trash_hold")
 		return
 	else
@@ -1168,6 +1437,9 @@ function FoodPreparationService.Init()
 		st.grillElapsed = s.grillStart and (os.clock() - s.grillStart) * RestaurantService.UpgradeValue("toaster") or nil
 		st.tray = s.tray
 		st.trayAt = s.trayAt
+		st.bowl = s.bowl
+		st.bowlAt = s.bowlAt
+		st.lid = s.lid
 		st.trayCap = trayCapacity()
 	end)
 
@@ -1180,6 +1452,12 @@ function FoodPreparationService.Init()
 			end
 			if s.trayModel then
 				s.trayModel:Destroy()
+			end
+			if s.bowlModel then
+				s.bowlModel:Destroy()
+			end
+			if s.lidModel then
+				s.lidModel:Destroy()
 			end
 		end
 		states[p] = nil
@@ -1197,11 +1475,21 @@ function FoodPreparationService.Init()
 				s.trayModel:Destroy()
 				s.trayModel = nil
 			end
+			if s and s.bowlModel and s.bowlAt == "hand" then
+				s.bowlModel:Destroy()
+				s.bowlModel = nil
+			end
+			if s and s.lidModel then
+				s.lidModel:Destroy()
+				s.lidModel = nil
+			end
 		end)
 		p.CharacterAdded:Connect(function()
 			task.wait(0.5)
 			refreshTrayVisual(p)
 			refreshMealVisual(p)
+			refreshBowlVisual(p)
+			refreshLidVisual(p)
 		end)
 	end
 	Players.PlayerAdded:Connect(onPlayer)

@@ -7,9 +7,11 @@
 --     too late is "slow" (fine, but wastes time)
 --   * every accepted stroke shaves one slice into the drip tray; `knife.slices` slices make a portion
 --   * a portion's quality = rhythm precision × how well the meat is cooked, stock is used per portion
+--   * finished portions go into the meat pan the cook holds (Server/FoodPreparationService), which is
+--     carried to the board and emptied onto the bread there (issue #3)
 -- The electric cutter strokes automatically while the button is held, much faster.
 -- Everyone sees the knife (welded to the right hand), the arm animation (Client/CutAnim) and the
--- falling slices (CutFX event); only the server decides how much meat lands in the bread.
+-- falling slices (CutFX event); only the server decides how much meat lands in the pan.
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
@@ -17,7 +19,6 @@ local CollectionService = game:GetService("CollectionService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local IngredientData = require(Shared.IngredientData)
-local OrderLogic = require(Shared.OrderLogic)
 local Progression = require(Shared.Progression)
 local Net = require(script.Parent.Net)
 local RestaurantService = require(script.Parent.RestaurantService)
@@ -205,6 +206,7 @@ local function stop(player: Player, reason: string?)
 		char:SetAttribute("Cutting", nil)
 	end
 	setPile(s.spit, 0, 1)
+	FoodPreparationService.DropEmptyBowl(player)
 	if reason then
 		Net.Notify(player, reason, nil, "warn")
 	end
@@ -239,7 +241,8 @@ local function start(player: Player, meat: any)
 	if not Net.Near(player, carve.Position, Config.Prep.PromptDistance + 7) then
 		return { ok = false }
 	end
-	if not FoodPreparationService.RequireOpenMeal(player) then
+	-- free hands or the meat pan in them
+	if not FoodPreparationService.CutBowl(player, false) then
 		return { ok = false }
 	end
 	if spitState.doneness < Config.Prep.MinCutDoneness then
@@ -259,6 +262,9 @@ local function start(player: Player, meat: any)
 	end
 	if sessions[player] then
 		stop(player)
+	end
+	if not FoodPreparationService.CutBowl(player, true) then
+		return { ok = false }
 	end
 	local knife = RestaurantService.KnifeId()
 	sessions[player] = {
@@ -301,8 +307,8 @@ local function stroke(player: Player)
 		stop(player)
 		return
 	end
-	local meal = FoodPreparationService.OpenMeal(player)
-	if not meal then
+	local bowl = FoodPreparationService.HeldBowl(player)
+	if not bowl then
 		stop(player)
 		return
 	end
@@ -311,8 +317,8 @@ local function stroke(player: Player)
 		stop(player, "n_undercooked")
 		return
 	end
-	if OrderLogic.MeatTotal(meal) >= Config.Prep.MaxMeatPortions then
-		stop(player, "n_too_much")
+	if #bowl >= Config.Prep.BowlPortions then
+		stop(player, "n_bowl_full")
 		return
 	end
 	-- rhythm rating
@@ -340,7 +346,7 @@ local function stroke(player: Player)
 	setPile(s.spit, s.slices, k.slices)
 
 	if s.slices >= k.slices then
-		-- a full portion: take it from the stock and put it into the bread
+		-- a full portion: take it from the stock and put it into the meat pan
 		if not RestaurantService.UseStock(IngredientData.Meat[s.meat].stock, 1) then
 			stop(player, "n_spit_empty")
 			return
@@ -352,9 +358,7 @@ local function stroke(player: Player)
 		local precision = sum / #s.scores
 		local cooked = FoodPreparationService.CutQuality(spitState.doneness)
 		local q = math.clamp(precision * cooked, 0, 1)
-		meal.meat[s.meat] = (meal.meat[s.meat] or 0) + 1
-		table.insert(meal.meatQuality, q)
-		table.insert(meal.steps, "meat:" .. s.meat)
+		FoodPreparationService.AddToBowl(player, s.meat, q)
 		spitState.doneness = math.max(0, spitState.doneness - Config.Prep.CutCost)
 		FoodPreparationService.UpdateSpitVisual(s.meat)
 		s.slices = 0
@@ -364,11 +368,10 @@ local function stroke(player: Player)
 		if cooked < 0.5 then
 			Net.Notify(player, "n_burnt_meat", nil, "bad")
 		end
-		Net.Fire("CutResult", player, { quality = q, precision = precision, cooked = cooked, portions = OrderLogic.MeatTotal(meal) })
+		Net.Fire("CutResult", player, { quality = q, precision = precision, cooked = cooked, portions = #bowl })
 		Net.Sound(player, "add")
 		RestaurantService.Record("portions", 1)
-		FoodPreparationService.RefreshMeal(player)
-		if OrderLogic.MeatTotal(meal) >= Config.Prep.MaxMeatPortions then
+		if #bowl >= Config.Prep.BowlPortions then
 			stop(player)
 		end
 	end
@@ -396,7 +399,7 @@ function MeatCuttingService.Init()
 				local char = p.Character
 				local hum = char and char:FindFirstChildOfClass("Humanoid")
 				local idle = os.clock() - (s.last or s.started)
-				if not hum or hum.Health <= 0 or idle > 45 or not FoodPreparationService.OpenMeal(p) or not Net.Near(p, s.carve.Position, Config.Prep.PromptDistance + 9) then
+				if not hum or hum.Health <= 0 or idle > 45 or not FoodPreparationService.HeldBowl(p) or not Net.Near(p, s.carve.Position, Config.Prep.PromptDistance + 9) then
 					stop(p)
 				end
 			end

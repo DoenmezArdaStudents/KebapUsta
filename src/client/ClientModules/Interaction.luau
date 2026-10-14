@@ -65,17 +65,46 @@ local function donenessText(d: number): string
 	return State.lang == "de" and "perfekt 🟢" or "perfect 🟢"
 end
 
--- ingredients only go into the bread you are holding (issue #3)
+-- vegetables, cheese and sauces go onto your open bread (on the board or in your hand)
 local function canAdd(): boolean
 	local m = meal()
-	return m ~= nil and not m.closed and State.player.location == "hand"
+	return m ~= nil and not m.closed and State.player.location ~= "grill"
 end
 
--- one pair of hands: held bread, carried tray or a box / meat cone
-local function handsBusy(): boolean
+-- one pair of hands (issue #3): bread, meat pan, bread top, tray or a box / meat cone
+local function heldMeal(): boolean
 	local ps = State.player
-	local held = ps ~= nil and ((ps.meal ~= nil and ps.location == "hand") or ps.trayAt == "hand")
+	return ps ~= nil and ps.meal ~= nil and ps.location == "hand"
+end
+
+local function handsBusyNoTray(): boolean
+	local ps = State.player
+	local held = ps ~= nil and (heldMeal() or ps.bowlAt == "hand" or ps.lid == true)
 	return held or game:GetService("Players").LocalPlayer:GetAttribute("Carry") ~= nil
+end
+
+local function handsBusy(): boolean
+	return handsBusyNoTray() or (State.player ~= nil and State.player.trayAt == "hand")
+end
+
+local function meatTotal(m: any): number
+	local n = 0
+	for _, v in pairs(m and m.meat or {}) do
+		n += v
+	end
+	return n
+end
+
+-- carving fills the pan in your hands, or a new one
+local function canCut(): boolean
+	local ps = State.player
+	if Interaction.IsCutting() then
+		return false
+	end
+	if ps.bowlAt == "hand" then
+		return #(ps.bowl or {}) < Config.Prep.BowlPortions
+	end
+	return ps.bowlAt == nil and not handsBusy()
 end
 
 local function refreshStation(e: Entry)
@@ -91,9 +120,11 @@ local function refreshStation(e: Entry)
 	prompt.HoldDuration = 0
 	if kind == "bread" then
 		local def = IngredientData.Bread[item]
-		prompt.ActionText = L("p_take")
-		prompt.ObjectText = def.name[State.lang] .. stockText(def.stock)
-		prompt.Enabled = m == nil and not handsBusy()
+		-- a classic bread's top half is fetched on its own, for closing it at the board
+		local lid = m ~= nil and item == "classic" and m.bread == "classic" and not m.closed
+		prompt.ActionText = lid and L("p_take_lid") or L("p_take")
+		prompt.ObjectText = def.name[State.lang] .. (lid and "" or stockText(def.stock))
+		prompt.Enabled = (m == nil or (lid and not ps.lid)) and not handsBusy()
 	elseif kind == "grill" then
 		local slot = part:GetAttribute("Slot")
 		if ps.location == "grill" and ps.grillSlot == slot then
@@ -112,7 +143,7 @@ local function refreshStation(e: Entry)
 		local def = IngredientData.Meat[item]
 		prompt.ActionText = L("p_cut")
 		prompt.ObjectText = def.name[State.lang] .. " · " .. donenessText(d) .. stockText(def.stock)
-		prompt.Enabled = canAdd() and not Interaction.IsCutting()
+		prompt.Enabled = canCut()
 	elseif kind == "spit_heat" then
 		local spitModel = part.Parent
 		local heat = spitModel and spitModel:GetAttribute("Heat") or "low"
@@ -148,40 +179,58 @@ local function refreshStation(e: Entry)
 			end
 		end
 		local mine = m ~= nil and ps.location == "board" and ps.board == i
+		local open = mine and m ~= nil and not m.closed
 		local free = user == nil or user == game:GetService("Players").LocalPlayer.UserId
-		if free and mine and m and not m.closed then
-			local verb = m.bread == "duerum" and "close_wrap" or (m.bread == "box" and "close_lid" or "close_close")
-			set(prompt, "close", L(verb), L("meal_title"))
-			set(p2, not handsBusy() and "pickup" or nil, L("p_pickup_meal"), "✋")
-		elseif free and mine then
-			set(prompt, "pack_takeaway", L("p_pack_takeaway"), "🛍️")
-			set(p2, "pack_plate", L("p_pack_plate"), "🍽️")
-		elseif free and m and ps.location == "hand" then
-			set(prompt, "place", L("p_place_meal"), L("meal_title"))
-			set(p2, nil)
+		local meatInPan = #(ps.bowl or {}) > 0
+		local meatFits = m ~= nil and meatTotal(m) < Config.Prep.MaxMeatPortions
+		local verb = m and (m.bread == "duerum" and "close_wrap" or (m.bread == "box" and "close_lid" or "close_close")) or "close_close"
+		local e1, e2 = nil, nil -- { action, text, object }
+		if free and heldMeal() then
+			e1 = { "place", L("p_place_meal"), L("meal_title") }
+		elseif free and ps.bowlAt == "hand" then
+			if open and meatInPan and meatFits then
+				e1 = { "meat_on", L("p_meat_on"), "🥩" }
+				e2 = { "bowl_down", L("p_bowl_down"), "🥩" }
+			else
+				e1 = { "bowl_down", L("p_bowl_down"), "🥩" }
+			end
+		elseif free and ps.lid then
+			if open and m.bread == "classic" then
+				e1 = { "close", L("close_close"), L("meal_title") }
+			end
 		elseif free and ps.trayAt == "hand" then
-			set(prompt, "tray_down", L("p_tray_down"), "🍽️")
-			set(p2, nil)
-		elseif free and ps.trayAt == i and not handsBusy() then
-			set(prompt, "tray_up", L("p_tray_up"), "🍽️")
-			set(p2, nil)
-		else
-			set(prompt, nil)
-			set(p2, nil)
+			e1 = { "tray_down", L("p_tray_down"), "🍽️" }
+		elseif free and not handsBusy() then
+			if open then
+				if ps.bowlAt == i and meatInPan and meatFits then
+					e1 = { "meat_on", L("p_meat_on"), "🥩" }
+				elseif m.bread ~= "classic" then
+					e1 = { "close", L(verb), L("meal_title") }
+				end
+				e2 = { "pickup", L("p_pickup_meal"), "✋" }
+			elseif mine then
+				e1 = { "pack_takeaway", L("p_pack_takeaway"), "🛍️" }
+				e2 = { "pack_plate", L("p_pack_plate"), "🍽️" }
+			elseif ps.bowlAt == i then
+				e1 = { "bowl_up", L("p_bowl_up"), "🥩" }
+				e2 = ps.trayAt == i and { "tray_up", L("p_tray_up"), "🍽️" } or nil
+			elseif ps.trayAt == i then
+				e1 = { "tray_up", L("p_tray_up"), "🍽️" }
+			end
 		end
+		set(prompt, e1 and e1[1], e1 and e1[2], e1 and e1[3])
+		set(p2, e2 and e2[1], e2 and e2[2], e2 and e2[3])
 	elseif kind == "drink" then
 		local def = IngredientData.Drinks[item]
 		prompt.ActionText = L("p_drink")
 		prompt.ObjectText = def.name[State.lang] .. stockText(def.stock)
 		-- onto the tray in your hands (or a new one)
-		local heldMeal = m ~= nil and ps.location == "hand"
-		prompt.Enabled = #(ps.tray or {}) < (ps.trayCap or 2) and not heldMeal and type(ps.trayAt) ~= "number"
+		prompt.Enabled = #(ps.tray or {}) < (ps.trayCap or 2) and not handsBusyNoTray() and type(ps.trayAt) ~= "number"
 	elseif kind == "trash" then
 		-- only what you carry to the bin
-		local heldMeal = m ~= nil and ps.location == "hand"
 		prompt.ActionText = L("p_discard")
-		prompt.ObjectText = heldMeal and L("meal_title") or L("tray")
-		prompt.Enabled = heldMeal or (ps.trayAt == "hand" and #(ps.tray or {}) > 0)
+		prompt.ObjectText = heldMeal() and L("meal_title") or (ps.bowlAt == "hand" and L("bowl_label") or (ps.lid and "🍞" or L("tray")))
+		prompt.Enabled = heldMeal() or ps.bowlAt == "hand" or ps.lid == true or (ps.trayAt == "hand" and #(ps.tray or {}) > 0)
 	elseif kind == "register" then
 		local ordering = false
 		for _, c in ipairs(CollectionService:GetTagged("Customer")) do
