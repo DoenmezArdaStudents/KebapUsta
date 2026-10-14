@@ -1,0 +1,14 @@
+# Built / exported places (build with `rojo build`, never commit)
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
+
+# Rojo sourcemap (regenerate with `rojo sourcemap`)
+sourcemap.json
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
