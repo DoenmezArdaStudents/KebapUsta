@@ -11,6 +11,23 @@ staff and expansions. UI and dialogue are bilingual (German / English).
 The repo is the source of truth and is synced into Studio with **Rojo**. The whole place
 (code *and* world) can be rebuilt from the repo with `rojo build`.
 
+## ⚠️ WICHTIG: Rojo niemals im Team-Create-Place verbinden
+
+Wenn ihr Rojo im echten Spiel verbindet (also im Team-Create-Place, auf dem wir alle zusammen
+arbeiten), überschreibt ihr den Code von anderen! Stattdessen immer zuerst eine eigene lokale
+Kopie bauen und **dort** arbeiten:
+
+```sh
+rojo build -o KebapUsta.rbxl
+```
+
+`KebapUsta.rbxl` in Studio öffnen, dann `rojo serve` + Rojo-Plugin → **Connect**. Diese Datei ist
+nur für euch, nicht für alle – so stören wir uns nicht gegenseitig.
+
+*(EN: Never connect `rojo serve` to the shared Team Create place – it overwrites other people's
+work. Build a local copy with `rojo build -o KebapUsta.rbxl`, open that in Studio and connect Rojo
+there.)*
+
 ## Getting started (new machine / new team member)
 
 1. Install [Rokit](https://github.com/rojo-rbx/rokit) (installs to `~/.rokit/bin`; make sure that is
@@ -18,8 +35,9 @@ The repo is the source of truth and is synced into Studio with **Rojo**. The who
 2. In the repo: `rokit install` → installs the exact tool versions from `rokit.toml`.
 3. Install the Rojo plugin in Studio (`rojo plugin install` or the Creator Store). The plugin
    version must match the pinned rojo version (7.7.x).
-4. Open the Team Create place in Studio, run `rojo serve` in the repo, open the Rojo plugin →
-   **Connect**. From then on, edits to files sync into Studio live.
+4. Build your own local copy with `rojo build -o KebapUsta.rbxl` and open **that file** in Studio
+   (not the Team Create place – see the warning above). Run `rojo serve` in the repo, open the
+   Rojo plugin → **Connect**. From then on, edits to files sync into Studio live.
 5. Optional: install the VS Code extensions from `.vscode/extensions.json` and run
    `rojo sourcemap -o sourcemap.json` so luau-lsp resolves `require`s.
 
