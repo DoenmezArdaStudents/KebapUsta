@@ -807,7 +807,8 @@ function MeatCutting.Init()
 	State.Changed:Connect(function(what)
 		if what == "player" and session then
 			local m = State.player and State.player.meal
-			if not m or m.closed or State.player.location == "grill" then
+			-- carving needs the bread in your hand (issue #3)
+			if not m or m.closed or State.player.location ~= "hand" then
 				MeatCutting.Stop()
 			else
 				updatePortions()

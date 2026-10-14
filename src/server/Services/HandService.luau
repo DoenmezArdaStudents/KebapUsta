@@ -1,7 +1,8 @@
 -- Visible items in the player's hand: every successful kitchen action briefly puts the real item
 -- (bread, a lettuce leaf, a sauce bottle, a drink …) into the right hand, welded to RightHand so
 -- everyone sees it. The player attributes HandAct/HandT drive the arm pose and the first-person
--- view model on the clients (Client/HandUI). The carried tray also flags "Tray" for a held pose.
+-- view model on the clients (Client/HandUI). The carried tray ("Tray") and the held bread ("HoldMeal",
+-- Server/FoodPreparationService) flag a held pose; the bread itself is a carried model, no flash.
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -147,14 +148,15 @@ function HandService.Flash(player: Player, kind: string, item: any, secs: number
 	end)
 end
 
--- snapshot of what an action can change: meal contents, tray, grill
+-- snapshot of what an action can change: meal contents, tray, grill (not where the meal lies: putting
+-- it down or picking it up is no kitchen action)
 local function signature(player: Player): string
 	local s = FoodPreparationService.GetState(player)
-	local ok, json = pcall(HttpService.JSONEncode, HttpService, { s.meal, #s.tray, s.location, s.grillStart ~= nil })
+	local ok, json = pcall(HttpService.JSONEncode, HttpService, { s.meal, #s.tray, s.grillStart ~= nil })
 	return ok and json or tostring(os.clock())
 end
 
-local SHOWS = { sauce = true, veg = true, cheese = true, bread = true, drink = true, grill = true, board = true }
+local SHOWS = { sauce = true, veg = true, cheese = true, drink = true, grill = true, board = true }
 
 function HandService.Init()
 	folder = Instance.new("Folder")

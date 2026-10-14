@@ -24,6 +24,24 @@ local function station(kind: string, item: string?): Instance?
 	return nil
 end
 
+-- a prep board: the given one, otherwise one nobody else works at
+local function board(index: any): Instance?
+	local me = game:GetService("Players").LocalPlayer.UserId
+	local fallback = nil
+	for _, p in ipairs(CollectionService:GetTagged("Station")) do
+		if p:GetAttribute("Station") == "board" then
+			if p:GetAttribute("Board") == index then
+				return p
+			end
+			local user = p:GetAttribute("User")
+			if not fallback and (user == nil or user == me) then
+				fallback = p
+			end
+		end
+	end
+	return fallback or station("board", nil)
+end
+
 local function customerInState(state: string): Instance?
 	for _, c in ipairs(CollectionService:GetTagged("Customer")) do
 		if c:GetAttribute("State") == state then
@@ -63,6 +81,10 @@ local function compute(): (number?, string?, Instance?)
 		end
 	end
 	if trayHasMeal then
+		-- the tray stands at the board until you pick it up
+		if type(ps.trayAt) == "number" then
+			return 6, "tut_6a", board(ps.trayAt)
+		end
 		return 6, "tut_6", customerInState("WaitingForFood")
 	end
 	if not item then
@@ -80,6 +102,16 @@ local function compute(): (number?, string?, Instance?)
 	for _, e in ipairs(list) do
 		states[e.key] = e.state
 	end
+	-- ingredients only go into the bread in your hand
+	local missing = states.meat ~= nil and states.meat ~= "ok"
+	for _, e in ipairs(list) do
+		if (string.sub(e.key, 1, 4) == "veg:" or string.sub(e.key, 1, 6) == "sauce:") and e.state ~= "ok" then
+			missing = true
+		end
+	end
+	if missing and ps.location == "board" and not meal.closed then
+		return 4, "tut_hold", board(ps.board)
+	end
 	if states.meat and states.meat ~= "ok" then
 		return 3, "tut_3", station("spit", item.meat == "veal" and "veal" or "chicken")
 	end
@@ -89,7 +121,7 @@ local function compute(): (number?, string?, Instance?)
 			return 4, "tut_4", station(kind, e.data.id)
 		end
 	end
-	return 5, "tut_5", station("board", nil)
+	return 5, "tut_5", board(ps.location == "board" and ps.board or ps.trayAt)
 end
 
 local function refresh()

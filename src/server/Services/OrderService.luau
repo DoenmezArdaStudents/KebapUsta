@@ -117,6 +117,11 @@ function OrderService.Serve(player: Player, c)
 		Net.Notify(player, "n_tray_empty", nil, "warn")
 		return "nothing"
 	end
+	-- only what you carry can be served (issue #3)
+	if not FoodPreparationService.TrayInHand(player) then
+		Net.Notify(player, "n_tray_not_in_hand", nil, "warn")
+		return "nothing"
+	end
 	local mealIdx, meals = {}, {}
 	for i, item in ipairs(tray) do
 		if item.kind == "meal" then

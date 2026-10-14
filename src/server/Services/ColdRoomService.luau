@@ -493,6 +493,10 @@ local function onTake(player: Player, part: BasePart)
 		Net.Notify(player, "n_carry_full", nil, "warn")
 		return
 	end
+	if FoodPreparationService.HandsBusy(player) then
+		Net.Notify(player, "n_hands_full", nil, "warn")
+		return
+	end
 	local uid = part:GetAttribute("PackUid")
 	local list = packs()
 	local p
@@ -582,6 +586,10 @@ local function onUnload(player: Player, part: BasePart)
 	local id = "meat_" .. tostring(meat)
 	if carried[player] or player:GetAttribute("Carry") then
 		Net.Notify(player, "n_carry_full", nil, "warn")
+		return
+	end
+	if FoodPreparationService.HandsBusy(player) then
+		Net.Notify(player, "n_hands_full", nil, "warn")
 		return
 	end
 	local n = RestaurantService.GetStock(id)

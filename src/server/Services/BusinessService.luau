@@ -1003,6 +1003,11 @@ local function deliverAction(player: Player)
 		Net.Notify(player, "n_no_delivery", nil, "warn")
 		return
 	end
+	-- only a carried tray can be handed over (issue #3)
+	if #FoodPreparationService.Tray(player) > 0 and not FoodPreparationService.TrayInHand(player) then
+		Net.Notify(player, "n_tray_not_in_hand", nil, "warn")
+		return
+	end
 	for _, id in ipairs(ids) do
 		local c = deliveries[id]
 		local status = OrderService.Serve(player, c)
