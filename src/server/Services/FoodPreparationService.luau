@@ -14,7 +14,8 @@
 --      portion in / pump the sauce right at the station instead.
 --   4. a classic bread is closed with its top half, fetched separately from the bread station
 --   5. grill: pick the bread up, put it in, take it out into your hands again
---   6. packing puts the meal on your tray at the front of the board; pick the tray up to serve
+--   6. packing: "to go" puts the meal into a paper bag, "for here" on a plate on a tray – either way
+--      straight into your hands; a bag / tray can be parked at the front of a board and picked up
 -- Drinks go on the tray in your hands; only a carried tray can be served, only carried things trashed.
 
 local Players = game:GetService("Players")
@@ -42,6 +43,7 @@ type PrepState = {
 	bowlAt: any, -- "hand" | board index | nil
 	lid: boolean?, -- the top half of a classic bread is in the hands
 	sauce: string?, -- sauce bottle in the hand (taken from its dispenser)
+	squeezeT: number?, -- last squeeze at the board (the held bottle reappears afterwards)
 	portion: { kind: string, id: string }?, -- a portion of vegetables / cheese in the hand
 	portionModel: Model?,
 	bowlModel: Model?,
@@ -487,6 +489,7 @@ end
 
 local HOLD_MEAL = CFrame.new(0, 0.15, -1.35) -- held bread, in front of the root (visible in first person)
 local HOLD_TRAY = CFrame.new(0, 0.2, -1.6)
+local HOLD_BAG = CFrame.new(0.6, -0.2, -1.35)
 local HOLD_BOWL = CFrame.new(0, 0.1, -1.3)
 -- from the board's top centre: bread on the left, meat pan on the right, tray at the pass to the guests
 local MEAL_ON_BOARD = CFrame.new(-0.45, 0, 0)
@@ -509,6 +512,28 @@ local function weldTo(m: Model, root: BasePart)
 			w.Part1 = p
 			w.Parent = p
 		end
+	end
+end
+
+-- what is being served: a paper bag once a meal to go is in it, otherwise a tray
+local function packOf(s: PrepState): string?
+	for _, it in ipairs(s.tray) do
+		if it.kind == "meal" then
+			return it.meal.pack
+		end
+	end
+	return nil
+end
+
+local function containerKind(s: PrepState): string
+	return packOf(s) == "takeaway" and "bag" or "tray"
+end
+
+-- something held in the right hand (sauce bottle, vegetable portion, bag): arm pose on the clients
+local function updateHoldRight(player: Player, s: PrepState)
+	local held = s.sauce ~= nil or s.portion ~= nil or (s.trayAt == "hand" and containerKind(s) == "bag")
+	if player:GetAttribute("HoldRight") ~= (held or nil) then
+		player:SetAttribute("HoldRight", held or nil)
 	end
 end
 
@@ -549,13 +574,30 @@ local function refreshMealVisual(player: Player)
 	end
 end
 
--- the tray: carried in front of the character, or standing at the front of a board
+-- kraft paper bag with the shop's red band; the meals and drinks are inside
+local function buildBag(m: Model, base: CFrame)
+	local kraft = Color3.fromRGB(196, 160, 112)
+	local w, h, d = 1.05, 1.15, 0.62
+	bit(m, Vector3.new(w, h, d), base * CFrame.new(0, h / 2, 0), kraft, Enum.Material.Fabric)
+	bit(m, Vector3.new(w + 0.02, 0.16, d + 0.02), base * CFrame.new(0, h - 0.08, 0), kraft:Lerp(Color3.new(0, 0, 0), 0.15), Enum.Material.Fabric)
+	bit(m, Vector3.new(w + 0.03, 0.22, d + 0.03), base * CFrame.new(0, h * 0.45, 0), Color3.fromRGB(176, 52, 38), Enum.Material.SmoothPlastic)
+	for _, sz in ipairs({ -1, 1 }) do
+		local z = sz * (d / 2 - 0.03)
+		bit(m, Vector3.new(0.05, 0.3, 0.04), base * CFrame.new(-0.2, h + 0.15, z), kraft, Enum.Material.Fabric)
+		bit(m, Vector3.new(0.05, 0.3, 0.04), base * CFrame.new(0.2, h + 0.15, z), kraft, Enum.Material.Fabric)
+		bit(m, Vector3.new(0.45, 0.05, 0.04), base * CFrame.new(0, h + 0.3, z), kraft, Enum.Material.Fabric)
+	end
+end
+
+-- the bag / tray: carried in front of the character, or standing at the front of a board
 local function refreshTrayVisual(player: Player)
 	local s = getState(player)
 	if #s.tray == 0 then
 		s.trayAt = nil
 	end
-	player:SetAttribute("Tray", s.trayAt == "hand" or nil)
+	local bag = containerKind(s) == "bag"
+	player:SetAttribute("Tray", (s.trayAt == "hand" and not bag) or nil)
+	updateHoldRight(player, s)
 	if s.trayModel then
 		s.trayModel:Destroy()
 		s.trayModel = nil
@@ -563,7 +605,7 @@ local function refreshTrayVisual(player: Player)
 	local root, base
 	if s.trayAt == "hand" then
 		root = rootPart(player)
-		base = root and root.CFrame * HOLD_TRAY
+		base = root and root.CFrame * (bag and HOLD_BAG or HOLD_TRAY)
 	elseif type(s.trayAt) == "number" then
 		local b = boardCFrame(s.trayAt)
 		base = b and b * TRAY_ON_BOARD
@@ -573,6 +615,16 @@ local function refreshTrayVisual(player: Player)
 	end
 	local m = Instance.new("Model")
 	m.Name = "Tray"
+	if bag then
+		buildBag(m, base)
+		if root then
+			weldTo(m, root)
+		end
+		m.Name = "Tray_" .. player.UserId
+		m.Parent = trayFolder
+		s.trayModel = m
+		return
+	end
 	local trayPart = bit(m, Vector3.new(2.3, 0.1, 1.3), base, Color3.fromRGB(176, 52, 38), Enum.Material.SmoothPlastic)
 	for i, item in ipairs(s.tray) do
 		local x = -0.8 + ((i - 1) % 3) * 0.8
@@ -686,19 +738,9 @@ local function handAct(player: Player, kind: string)
 end
 
 local HOLD_SAUCE = CFrame.new(0.85, 0.3, -1.25)
--- from the bread's centre: the bottle upside down above it, slightly tilted towards the cook
-local SQUEEZE_SAUCE = CFrame.new(0.15, 1.05, -0.2) * CFrame.Angles(math.rad(180), 0, math.rad(-14))
 
--- something held in the right hand (sauce bottle, vegetable portion): arm pose on the clients
-local function updateHoldRight(player: Player, s: PrepState)
-	local held = s.sauce ~= nil or s.portion ~= nil
-	if player:GetAttribute("HoldRight") ~= (held or nil) then
-		player:SetAttribute("HoldRight", held or nil)
-	end
-end
-
--- the sauce bottle in the right hand; while squeezing it hangs upside down above the bread (squeezeAt)
-local function refreshSauceVisual(player: Player, squeezeAt: CFrame?)
+-- the sauce bottle held in the right hand (while squeezing, Server/HandService shows it in the fist)
+local function refreshSauceVisual(player: Player, hidden: boolean?)
 	local s = getState(player)
 	updateHoldRight(player, s)
 	if s.sauceModel then
@@ -706,22 +748,20 @@ local function refreshSauceVisual(player: Player, squeezeAt: CFrame?)
 		s.sauceModel = nil
 	end
 	local root = s.sauce and rootPart(player)
-	if not root or not s.sauce then
+	if not root or not s.sauce or hidden then
 		return
 	end
 	local def = IngredientData.Sauce[s.sauce]
 	local col = def and def.color or Color3.fromRGB(240, 240, 230)
 	local m = Instance.new("Model")
 	m.Name = "Sauce_" .. player.UserId
-	local cf = squeezeAt and squeezeAt * SQUEEZE_SAUCE or root.CFrame * HOLD_SAUCE
+	local cf = root.CFrame * HOLD_SAUCE
 	local vertical = CFrame.Angles(0, 0, math.rad(90))
 	bit(m, Vector3.new(0.85, 0.42, 0.42), cf * vertical, col, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	bit(m, Vector3.new(0.14, 0.44, 0.44), cf * CFrame.new(0, 0.48, 0) * vertical, Color3.fromRGB(235, 235, 235), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	bit(m, Vector3.new(0.26, 0.1, 0.1), cf * CFrame.new(0, 0.66, 0) * vertical, Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	bit(m, Vector3.new(0.3, 0.12, 0.43), cf * CFrame.new(0, -0.05, -0.01), Color3.fromRGB(250, 250, 245), Enum.Material.Fabric)
-	if not squeezeAt then
-		weldTo(m, root)
-	end
+	weldTo(m, root)
 	m.Parent = mealFolder
 	s.sauceModel = m
 end
@@ -1306,11 +1346,15 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		end
 		local id = s.sauce
 		if addIngredient(player, "sauces", id, IngredientData.Sauce[id].stock) then
-			handAct(player, "sauce")
-			local b = boardCFrame(i)
-			refreshSauceVisual(player, b and b * MEAL_ON_BOARD or nil)
+			-- the same squeeze animation as at the stations: bottle in the fist, arm over the bread
+			refreshSauceVisual(player, true)
+			local t = os.clock()
+			s.squeezeT = t
+			if FoodPreparationService.FlashHook then
+				FoodPreparationService.FlashHook(player, "sauce", id)
+			end
 			task.delay(1.1, function()
-				if states[player] == s and s.sauce == id then
+				if states[player] == s and s.sauce == id and s.squeezeT == t then
 					refreshSauceVisual(player)
 				end
 			end)
@@ -1322,10 +1366,14 @@ function Actions.board(player: Player, part: BasePart, action: any)
 			return
 		end
 		local p = s.portion
-		if addIngredient(player, p.kind == "cheese" and "cheese" or "veg", p.id, nil) then
+		local category = p.kind == "cheese" and "cheese" or "veg"
+		if addIngredient(player, category, p.id, nil) then
 			s.portion = nil
 			refreshPortionVisual(player)
-			handAct(player, "drop")
+			-- the portion in the fist, reaching over the bread (Server/HandService)
+			if FoodPreparationService.FlashHook then
+				FoodPreparationService.FlashHook(player, category, p.id)
+			end
 			push(player)
 		end
 		return
@@ -1356,18 +1404,29 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		if not sameBoard() then
 			return
 		end
+		local pack = action == "pack_takeaway" and "takeaway" or "plate"
+		-- one container per trip: a bag for meals to go, a tray for meals eaten here
+		local current = packOf(s)
+		if current and current ~= pack then
+			notify(player, current == "takeaway" and "n_holding_bag" or "n_holding_tray")
+			return
+		end
+		if handsBusyNoTray(player, s) then
+			notify(player, "n_hands_full")
+			return
+		end
 		if #s.tray >= trayCapacity() then
 			notify(player, "n_tray_full")
 			return
 		end
-		s.meal.pack = action == "pack_takeaway" and "takeaway" or "plate"
+		s.meal.pack = pack
 		table.insert(s.tray, { kind = "meal", meal = s.meal })
 		s.meal = nil
 		releasePlace(player)
-		-- a new tray is set out at the front of this board
-		s.trayAt = s.trayAt or i
+		-- the bag / tray goes straight into the hands
+		s.trayAt = "hand"
 		Net.Sound(player, "wrap")
-		Net.Notify(player, "n_meal_to_tray", nil, "success")
+		Net.Notify(player, pack == "takeaway" and "n_meal_to_bag" or "n_meal_to_tray", nil, "success")
 		refreshTrayVisual(player)
 	elseif action == "tray_down" then
 		if s.trayAt ~= "hand" or not sameBoard() then
@@ -1462,6 +1521,8 @@ end
 -- handled by other services (set from Main)
 FoodPreparationService.ExternalActions = {} :: { [string]: (Player, BasePart, any) -> () }
 FoodPreparationService.FreshHook = nil :: ((string) -> number)?
+-- shows an item in the fist with the arm animation (Server/HandService.Flash)
+FoodPreparationService.FlashHook = nil :: ((Player, string, any, number?) -> ())?
 
 local function onInteract(player: Player, part: any, action: any)
 	if typeof(part) ~= "Instance" or not part:IsA("BasePart") then

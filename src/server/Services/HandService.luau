@@ -168,6 +168,8 @@ function HandService.Init()
 	FoodPreparationService.BeforeAction = function(player: Player, kind: string)
 		return SHOWS[kind] and signature(player, kind) or nil
 	end
+	-- squeezing a carried bottle / putting a carried portion on at the board looks the same
+	FoodPreparationService.FlashHook = HandService.Flash
 	FoodPreparationService.AfterAction = function(player: Player, part: BasePart, kind: string, before: string?)
 		if before and signature(player, kind) ~= before then
 			HandService.Flash(player, kind, part:GetAttribute("Item"))

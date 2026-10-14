@@ -213,6 +213,14 @@ local function refreshStation(e: Entry)
 		local meatFits = m ~= nil and meatTotal(m) < Config.Prep.MaxMeatPortions
 		local verb = m and (m.bread == "duerum" and "close_wrap" or (m.bread == "box" and "close_lid" or "close_close")) or "close_close"
 		local e1, e2 = nil, nil -- { action, text, object }
+		-- a meal to go makes the container a bag
+		local bag = false
+		for _, t in ipairs(ps.tray or {}) do
+			if t.kind == "meal" and t.meal.pack == "takeaway" then
+				bag = true
+			end
+		end
+		local downText, upText, icon = L(bag and "p_bag_down" or "p_tray_down"), L(bag and "p_bag_up" or "p_tray_up"), bag and "🛍️" or "🍽️"
 		if free and heldMeal() then
 			e1 = { "place", L("p_place_meal"), L("meal_title") }
 		elseif free and ps.bowlAt == "hand" then
@@ -239,7 +247,7 @@ local function refreshStation(e: Entry)
 				e1 = { "close", L("close_close"), L("meal_title") }
 			end
 		elseif free and ps.trayAt == "hand" then
-			e1 = { "tray_down", L("p_tray_down"), "🍽️" }
+			e1 = { "tray_down", downText, icon }
 		elseif free and not handsBusy() then
 			if open then
 				if ps.bowlAt == i and meatInPan and meatFits then
@@ -253,9 +261,9 @@ local function refreshStation(e: Entry)
 				e2 = { "pack_plate", L("p_pack_plate"), "🍽️" }
 			elseif ps.bowlAt == i then
 				e1 = { "bowl_up", L("p_bowl_up"), "🥩" }
-				e2 = ps.trayAt == i and { "tray_up", L("p_tray_up"), "🍽️" } or nil
+				e2 = ps.trayAt == i and { "tray_up", upText, icon } or nil
 			elseif ps.trayAt == i then
-				e1 = { "tray_up", L("p_tray_up"), "🍽️" }
+				e1 = { "tray_up", upText, icon }
 			end
 		end
 		set(prompt, e1 and e1[1], e1 and e1[2], e1 and e1[3])
