@@ -11,6 +11,30 @@ staff and expansions. UI and dialogue are bilingual (German / English).
 The repo is the source of truth and is synced into Studio with **Rojo**. The whole place
 (code *and* world) can be rebuilt from the repo with `rojo build`.
 
+## Getting started (new machine / new team member)
+
+1. Install [Rokit](https://github.com/rojo-rbx/rokit) (installs to `~/.rokit/bin`; make sure that is
+   on `PATH` *before* any Homebrew `rojo`, so the pinned version wins).
+2. In the repo: `rokit install` → installs the exact tool versions from `rokit.toml`.
+3. Install the Rojo plugin in Studio (`rojo plugin install` or the Creator Store). The plugin
+   version must match the pinned rojo version (7.7.x).
+4. Open the Team Create place in Studio, run `rojo serve` in the repo, open the Rojo plugin →
+   **Connect**. From then on, edits to files sync into Studio live.
+5. Optional: install the VS Code extensions from `.vscode/extensions.json` and run
+   `rojo sourcemap -o sourcemap.json` so luau-lsp resolves `require`s.
+
+GitHub: `DoenmezArdaStudents/KebapUsta`, branch `main`. Pushing needs collaborator write access
+(a "Permission denied" on push means the account hasn't been added yet – ask the repo owner).
+
+## Daily workflow
+
+- **Code:** edit `.luau` files in `src/` (not in Studio) while `rojo serve` is connected. Edits made
+  to synced scripts inside Studio are *not* written back to disk and get overwritten.
+- **World / models:** see "World / assets workflow" below – Studio edits must be exported to
+  `assets/` before anyone syncs.
+- **Before committing:** `rojo build -o /tmp/check.rbxl` must succeed; run `selene src`.
+- Never commit `.rbxl`/`.rbxlx` files – they are gitignored; the repo itself is the place file.
+
 ## Toolchain
 
 Tools are pinned in `rokit.toml` (install with `rokit install`):
@@ -91,6 +115,40 @@ File naming follows Rojo: `X.server.luau` = Script, `X.client.luau` = LocalScrip
   Studio, run the builder in Edit mode, then re-export the model to `assets/Workspace/Restaurant.rbxm`.
 - `.rbxm` files are binary – they can't be merged. Coordinate who edits which asset.
 - Unmapped instances (Workspace.Camera/Terrain, runtime-created Remotes, Lobby, …) are not managed.
+- **Exporting a model by hand:** in Studio right-click the instance → *Save to File…* → save as
+  `.rbxm` over the matching file in `assets/`. One root instance per file (Rojo requirement).
+- **New asset:** export it to `assets/<Service>/<Name>.rbxm` and add a node with `$path` to
+  `default.project.json`, otherwise Rojo ignores it (and `rojo build` won't contain it).
+- **Service properties** (Lighting, StarterPlayer, Workspace) are set via `$properties` in
+  `default.project.json`. Changing them in Studio is not saved to the repo – update the JSON.
+- Studio also contains an empty `Rojo` ModuleScript directly under `game` (`return { API = nil }`),
+  a plugin leftover. It is intentionally not part of the repo.
+
+## Roblox Studio MCP (notes for Claude)
+
+The Roblox Studio MCP server (`mcp__Roblox_Studio__*`) connects Claude to a running Studio.
+
+- Call `list_roblox_studios` first; pick the instance named `Kebap Usta (placeId: 124098714209687)`
+  and pass its id as `studio_id`. Several Studio instances may be listed.
+- **Prefer editing files in `src/` over editing scripts in Studio** – with Rojo connected, the file
+  is the source of truth. Use MCP for reading live state, playtesting (`start_stop_play`,
+  `get_console_output`, `ServerStorage.KebapDebug`) and exporting assets.
+- `execute_luau` restrictions observed: no `HttpService` requests (HTTP is disabled in the
+  experience settings – don't enable it), some properties are unreadable (e.g. `Lighting.Technology`).
+- **Exporting models to `.rbxm` via MCP** (lossless, no user action needed):
+  1. In `execute_luau`: `SerializationService:SerializeInstancesAsync({inst})` → buffer in rbxm
+     format. For many/large items, bundle them, compress with
+     `EncodingService:CompressBuffer(buf, Enum.CompressionAlgorithm.Zstd, 19)`, then
+     `EncodingService:Base64Encode(...)`, and keep the string in `shared.<Name>` between calls.
+  2. Tool output is capped at ~100k characters. Return the base64 in ≤90k-char chunks wrapped in
+     markers (e.g. `BEGIN[i]:…:END`); results that large are auto-saved to a file under
+     `~/.claude/projects/…/tool-results/`. Pad small final chunks so they get saved to a file too.
+  3. Reassemble the chunks with a small Python script (check the total length), base64-decode,
+     `zstd -d`, and write the files. Never retype base64 by hand.
+  4. Verify: `rojo build`, then compare against Studio – e.g. script source length + checksum and
+     `#GetDescendants()` per container, computed the same way in Studio (`execute_luau`) and on the
+     built place (`lune` with `@lune/roblox`). They must match exactly.
+- Scripts can be read directly with `script_read` / `script_grep`; no export needed for code.
 
 ## Conventions
 
