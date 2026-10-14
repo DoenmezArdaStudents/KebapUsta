@@ -796,7 +796,7 @@ function Actions.bread(player: Player, part: BasePart)
 			push(player)
 			return
 		end
-		notify(player, "n_have_meal")
+		notify(player, s.lid and "n_hands_full" or "n_have_meal")
 		return
 	end
 	if handsBusy(player, s) then
