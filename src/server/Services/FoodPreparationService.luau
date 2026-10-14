@@ -684,10 +684,11 @@ local function handAct(player: Player, kind: string)
 end
 
 local HOLD_SAUCE = CFrame.new(0.85, 0.3, -1.25)
-local SQUEEZE_SAUCE = CFrame.new(0.3, 0.75, -1.75) * CFrame.Angles(math.rad(180), 0, math.rad(12))
+-- from the bread's centre: the bottle upside down above it, slightly tilted towards the cook
+local SQUEEZE_SAUCE = CFrame.new(0.15, 1.05, -0.2) * CFrame.Angles(math.rad(180), 0, math.rad(-14))
 
--- the sauce bottle in the right hand; upside down above the bread while squeezing
-local function refreshSauceVisual(player: Player, squeezing: boolean?)
+-- the sauce bottle in the right hand; while squeezing it hangs upside down above the bread (squeezeAt)
+local function refreshSauceVisual(player: Player, squeezeAt: CFrame?)
 	local s = getState(player)
 	player:SetAttribute("HoldSauce", s.sauce)
 	if s.sauceModel then
@@ -702,13 +703,15 @@ local function refreshSauceVisual(player: Player, squeezing: boolean?)
 	local col = def and def.color or Color3.fromRGB(240, 240, 230)
 	local m = Instance.new("Model")
 	m.Name = "Sauce_" .. player.UserId
-	local cf = root.CFrame * (squeezing and SQUEEZE_SAUCE or HOLD_SAUCE)
+	local cf = squeezeAt and squeezeAt * SQUEEZE_SAUCE or root.CFrame * HOLD_SAUCE
 	local vertical = CFrame.Angles(0, 0, math.rad(90))
 	bit(m, Vector3.new(0.85, 0.42, 0.42), cf * vertical, col, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	bit(m, Vector3.new(0.14, 0.44, 0.44), cf * CFrame.new(0, 0.48, 0) * vertical, Color3.fromRGB(235, 235, 235), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	bit(m, Vector3.new(0.26, 0.1, 0.1), cf * CFrame.new(0, 0.66, 0) * vertical, Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 	bit(m, Vector3.new(0.3, 0.12, 0.43), cf * CFrame.new(0, -0.05, -0.01), Color3.fromRGB(250, 250, 245), Enum.Material.Fabric)
-	weldTo(m, root)
+	if not squeezeAt then
+		weldTo(m, root)
+	end
 	m.Parent = mealFolder
 	s.sauceModel = m
 end
@@ -1232,7 +1235,8 @@ function Actions.board(player: Player, part: BasePart, action: any)
 		local id = s.sauce
 		if addIngredient(player, "sauces", id, IngredientData.Sauce[id].stock) then
 			handAct(player, "sauce")
-			refreshSauceVisual(player, true)
+			local b = boardCFrame(i)
+			refreshSauceVisual(player, b and b * MEAL_ON_BOARD or nil)
 			task.delay(1.1, function()
 				if states[player] == s and s.sauce == id then
 					refreshSauceVisual(player)
