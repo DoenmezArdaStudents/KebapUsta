@@ -230,8 +230,6 @@ local function refreshStation(e: Entry)
 		prompt.Enabled = carry ~= nil
 	elseif kind == "logi_box" then
 		prompt.Enabled = carry == nil
-	elseif kind == "spit_unload" then
-		prompt.Enabled = carry == nil and part:GetAttribute("PromptOn") ~= false
 	elseif carry and (kind == "bread" or kind == "veg" or kind == "cheese" or kind == "sauce" or kind == "drink") then
 		local sid = kind == "veg" and item or kind == "cheese" and "cheese" or (kind == "bread" and item == "box") and "box" or (kind == "bread" and "bread_" or kind == "sauce" and "sauce_" or "drink_") .. tostring(item)
 		prompt.Enabled = sid == carry
