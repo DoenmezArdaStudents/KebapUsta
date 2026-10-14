@@ -4,6 +4,8 @@
 -- templates and are replaced by parts in a "StockDisplay" folder):
 --   bread crates   one bread / flatbread / box per unit
 --   salad bar      the veg / cheese level in each pan sinks with every portion used
+--   sauces         a sight window on each bottle shows the sauce level
+--   drinks fridge  one bottle per unit, the front row empties first
 -- Displays never show more than Config.Stock.BaseCapacity; beyond that (storage upgrade) they stay full.
 
 local CollectionService = game:GetService("CollectionService")
@@ -229,6 +231,123 @@ local function updatePan(pan: Pan)
 end
 
 ---------------------------------------------------------------------------
+-- Sauce bottles: a dark sight window on the staff side of each bottle with a bar of sauce that
+-- drops with every portion used.
+---------------------------------------------------------------------------
+local STAFF_SIDE = Vector3.new(0, 0, -1) -- kitchen side of the front counter (WorldBuilder layout)
+local WINDOW_WIDTH = 0.24
+local WINDOW_HEIGHT = 0.7 -- share of the bottle height
+local WINDOW_COLOR = Color3.fromRGB(35, 35, 40)
+
+type Sauce = { bottle: BasePart, stock: string, window: BasePart, bar: BasePart, folder: Folder, shown: number? }
+
+local function setupSauce(bottle: BasePart): Sauce | false
+	local def = IngredientData.Find(bottle:GetAttribute("Item"))
+	-- the bottle is an upright cylinder: its axis (the part's X axis) points up
+	if not def or math.abs(bottle.CFrame.RightVector.Y) < 0.9 then
+		return false
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "StockDisplay"
+	folder.Parent = bottle
+	local radius = math.min(bottle.Size.Y, bottle.Size.Z) / 2
+	local center = bottle.Position + STAFF_SIDE * (radius + 0.01)
+	local window = Instance.new("Part")
+	window.Name = "SightWindow"
+	window.Size = Vector3.new(WINDOW_WIDTH, bottle.Size.X * WINDOW_HEIGHT, 0.02)
+	window.CFrame = CFrame.lookAt(center, center + STAFF_SIDE)
+	window.Color = WINDOW_COLOR
+	window.Material = Enum.Material.SmoothPlastic
+	decor(window)
+	window.Parent = folder
+	local bar = Instance.new("Part")
+	bar.Name = "SauceLevel"
+	bar.Color = bottle.Color
+	bar.Material = Enum.Material.SmoothPlastic
+	decor(bar)
+	return { bottle = bottle, stock = def.stock, window = window, bar = bar, folder = folder }
+end
+
+local function updateSauce(s: Sauce)
+	local n = stockOf(s.stock)
+	if s.shown == n then
+		return
+	end
+	s.shown = n
+	local full = s.window.Size.Y - 0.08
+	local h = full * n / Config.Stock.BaseCapacity
+	s.bar.Size = Vector3.new(WINDOW_WIDTH - 0.08, h, 0.02)
+	s.bar.CFrame = s.window.CFrame * CFrame.new(0, -full / 2 + h / 2, -0.012)
+	s.bar.Parent = if n > 0 then s.folder else nil
+end
+
+---------------------------------------------------------------------------
+-- Drinks fridge: one bottle per unit on the drink's shelf, in rows from the back to the glass door,
+-- so the front row empties first. The shelf's own Bottle parts are the templates.
+---------------------------------------------------------------------------
+local FRIDGE_COLS = 6
+local FRIDGE_ROWS = 5
+local FRIDGE_MARGIN = 0.25 -- distance of the outer bottles from the shelf edges
+
+type Shelf = { shelf: BasePart, stock: string, bottle: BasePart, rot: CFrame, y: number, front: number, folder: Folder, shown: number? }
+
+local function setupShelf(shelf: BasePart): Shelf | false
+	local def = IngredientData.Find(shelf:GetAttribute("Item"))
+	local unit = shelf.Parent
+	if not def or not unit then
+		return false
+	end
+	-- the shelf's bottles are the ones within its height
+	local bottles = {}
+	for _, c in ipairs(unit:GetChildren()) do
+		if c.Name == "Bottle" and c:IsA("BasePart") and math.abs(shelf.CFrame:PointToObjectSpace(c.Position).Y) < shelf.Size.Y / 2 then
+			table.insert(bottles, c)
+		end
+	end
+	if #bottles == 0 then
+		return false
+	end
+	local rel = shelf.CFrame:ToObjectSpace(bottles[1].CFrame)
+	local tpl = bottles[1]:Clone()
+	decor(tpl)
+	for _, b in ipairs(bottles) do
+		b:Destroy()
+	end
+	local glass = unit:FindFirstChild("FridgeGlass")
+	local front = if glass and glass:IsA("BasePart") and shelf.CFrame:PointToObjectSpace(glass.Position).Z < 0 then -1 else 1
+	local folder = Instance.new("Folder")
+	folder.Name = "StockDisplay"
+	folder.Parent = unit
+	return { shelf = shelf, stock = def.stock, bottle = tpl, rot = rel - rel.Position, y = rel.Y, front = front, folder = folder }
+end
+
+local function updateShelf(s: Shelf)
+	local n = math.min(stockOf(s.stock), FRIDGE_COLS * FRIDGE_ROWS)
+	if s.shown == n then
+		return
+	end
+	s.shown = n
+	for _, b in ipairs(s.folder:GetChildren()) do
+		if (tonumber(b.Name) or math.huge) > n then
+			b:Destroy()
+		end
+	end
+	local halfX = s.shelf.Size.X / 2 - FRIDGE_MARGIN
+	local halfZ = s.shelf.Size.Z / 2 - FRIDGE_MARGIN
+	for i = 1, n do
+		if not s.folder:FindFirstChild(tostring(i)) then
+			local row, col = (i - 1) // FRIDGE_COLS, (i - 1) % FRIDGE_COLS
+			local x = -halfX + col * halfX * 2 / (FRIDGE_COLS - 1)
+			local z = s.front * (-halfZ + row * halfZ * 2 / (FRIDGE_ROWS - 1))
+			local b = s.bottle:Clone()
+			b.Name = tostring(i)
+			b.CFrame = s.shelf.CFrame * CFrame.new(x, s.y, z) * s.rot
+			b.Parent = s.folder
+		end
+	end
+end
+
+---------------------------------------------------------------------------
 -- Update
 ---------------------------------------------------------------------------
 type Kind = { setup: (BasePart) -> any, update: (any) -> () }
@@ -236,6 +355,8 @@ local KINDS: { [string]: Kind } = {
 	bread = { setup = setupCrate, update = updateCrate },
 	veg = { setup = setupPan, update = updatePan },
 	cheese = { setup = setupPan, update = updatePan },
+	sauce = { setup = setupSauce, update = updateSauce },
+	drink = { setup = setupShelf, update = updateShelf },
 }
 local displays: { [BasePart]: any } = {} -- station -> display state, false if it can't show stock
 
