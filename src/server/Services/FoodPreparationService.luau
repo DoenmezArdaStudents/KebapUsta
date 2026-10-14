@@ -578,14 +578,14 @@ end
 local function buildBag(m: Model, base: CFrame)
 	local kraft = Color3.fromRGB(196, 160, 112)
 	local w, h, d = 1.05, 1.15, 0.62
-	bit(m, Vector3.new(w, h, d), base * CFrame.new(0, h / 2, 0), kraft, Enum.Material.Fabric)
-	bit(m, Vector3.new(w + 0.02, 0.16, d + 0.02), base * CFrame.new(0, h - 0.08, 0), kraft:Lerp(Color3.new(0, 0, 0), 0.15), Enum.Material.Fabric)
+	bit(m, Vector3.new(w, h, d), base * CFrame.new(0, h / 2, 0), kraft, Enum.Material.SmoothPlastic)
+	bit(m, Vector3.new(w + 0.02, 0.16, d + 0.02), base * CFrame.new(0, h - 0.08, 0), kraft:Lerp(Color3.new(0, 0, 0), 0.15), Enum.Material.SmoothPlastic)
 	bit(m, Vector3.new(w + 0.03, 0.22, d + 0.03), base * CFrame.new(0, h * 0.45, 0), Color3.fromRGB(176, 52, 38), Enum.Material.SmoothPlastic)
 	for _, sz in ipairs({ -1, 1 }) do
 		local z = sz * (d / 2 - 0.03)
-		bit(m, Vector3.new(0.05, 0.3, 0.04), base * CFrame.new(-0.2, h + 0.15, z), kraft, Enum.Material.Fabric)
-		bit(m, Vector3.new(0.05, 0.3, 0.04), base * CFrame.new(0.2, h + 0.15, z), kraft, Enum.Material.Fabric)
-		bit(m, Vector3.new(0.45, 0.05, 0.04), base * CFrame.new(0, h + 0.3, z), kraft, Enum.Material.Fabric)
+		bit(m, Vector3.new(0.05, 0.3, 0.04), base * CFrame.new(-0.2, h + 0.15, z), kraft, Enum.Material.SmoothPlastic)
+		bit(m, Vector3.new(0.05, 0.3, 0.04), base * CFrame.new(0.2, h + 0.15, z), kraft, Enum.Material.SmoothPlastic)
+		bit(m, Vector3.new(0.45, 0.05, 0.04), base * CFrame.new(0, h + 0.3, z), kraft, Enum.Material.SmoothPlastic)
 	end
 end
 
