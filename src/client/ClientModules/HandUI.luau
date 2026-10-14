@@ -10,7 +10,7 @@ local lp = Players.LocalPlayer
 type Pose = { [string]: { any } }
 local REACH: Pose = { RightShoulder = { "RightUpperArm", 1.1, 0, 0.15 }, RightElbow = { "RightLowerArm", 0.55, 0, 0 }, RightWrist = { "RightHand", -0.2, 0, 0 } }
 local SQUEEZE: Pose = { RightShoulder = { "RightUpperArm", 1.35, 0, 0.12 }, RightElbow = { "RightLowerArm", 0.9, 0, 0 }, RightWrist = { "RightHand", 0.6, 0, 0 } }
--- sauce bottle held in the right hand, ready to squeeze
+-- sauce bottle / vegetable portion held in the right hand
 local BOTTLE: Pose = { RightShoulder = { "RightUpperArm", 0.75, 0, 0.1 }, RightElbow = { "RightLowerArm", 0.7, 0, 0 } }
 local TRAY: Pose = {
 	RightShoulder = { "RightUpperArm", 0.95, 0, -0.25 }, LeftShoulder = { "LeftUpperArm", 0.95, 0, 0.25 },
@@ -44,7 +44,7 @@ local function poseStep(dt: number)
 		if tw > 0 then
 			apply(char, TRAY, tw)
 		end
-		if pl:GetAttribute("HoldSauce") then
+		if pl:GetAttribute("HoldRight") then
 			apply(char, BOTTLE, 1)
 		end
 		-- quick reach with the item in the right hand

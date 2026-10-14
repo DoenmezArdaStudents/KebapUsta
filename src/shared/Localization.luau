@@ -94,6 +94,9 @@ local S = {
 	p_sauce_pump = { de = "Soße aufs Brot pumpen", en = "Pump sauce on" },
 	p_sauce_back = { de = "Flasche zurückstellen", en = "Put bottle back" },
 	p_sauce_taken = { de = "Flasche ist weg", en = "Bottle is taken" },
+	p_portion_on = { de = "Drauflegen", en = "Put it on" },
+	p_portion_in = { de = "Ins Brot legen", en = "Put it in the bread" },
+	p_portion_back = { de = "Zurücklegen", en = "Put it back" },
 
 	-- notifications
 	n_need_meal = { de = "Nimm zuerst Brot, Dürüm oder eine Box.", en = "Grab bread, a dürüm or a box first." },
@@ -210,6 +213,7 @@ local S = {
 	n_no_meat_bowl = { de = "🥩 Schneide zuerst Fleisch in deine Schale.", en = "🥩 Carve meat into your pan first." },
 	n_sauce_taken = { de = "🧴 {name} hat diese Soße gerade in der Hand.", en = "🧴 {name} is holding this sauce right now." },
 	n_sauce_back = { de = "🧴 Stell die Soße zurück in ihren Spender.", en = "🧴 Put the sauce back into its dispenser." },
+	n_portion_discarded = { de = "Portion weggeworfen.", en = "Portion thrown away." },
 	n_need_bread_first = { de = "Erst ein Gericht beginnen.", en = "Start a meal first." },
 	n_vip = { de = "⭐ Ein Restaurantkritiker ist da! Doppelte Belohnung bei perfekter Bedienung.", en = "⭐ A food critic arrived! Double reward for perfect service." },
 
@@ -268,7 +272,7 @@ local S = {
 	tut_2 = { de = "Schneide zuerst das Fleisch: Geh zum Hühnerspieß und drück [E]. Schneide im Takt (Klick / Leertaste) – im grünen Bereich wird das Fleisch am besten. Die Portionen landen in deiner Fleischschale, das Ticket zeigt, wie viele nötig sind. [E] = fertig.", en = "Carve the meat first: go to the chicken spit and press [E]. Cut in rhythm (click / space) – the green zone gives the best meat. The portions land in your meat pan, the ticket shows how many are needed. [E] = done." },
 	tut_3 = { de = "Trag die Fleischschale zu einem Arbeitsbrett vorne und stell sie dort ab [E].", en = "Carry the meat pan to a prep board at the front and put it down [E]." },
 	tut_4 = { de = "Hol ein Kebap-Brot aus der Brotstation hinten und leg es am Brett neben die Schale [E].", en = "Get a kebab bread from the bread station at the back and put it on the board next to the pan [E]." },
-	tut_5 = { de = "Gib das Fleisch aus der Schale aufs Brot [E am Brett] und Gemüse aus der Kühltheke dazu. Soßen: Flasche am Spender nehmen, am Brett draufspritzen [E] und wieder zurückstellen. Grüne Häkchen zeigen, was schon passt.", en = "Put the meat from the pan on the bread [E at the board] and add vegetables from the cold counter. Sauces: take the bottle from its dispenser, squeeze it on at the board [E] and put it back. Green ticks show what is already right." },
+	tut_5 = { de = "Gib das Fleisch aus der Schale aufs Brot [E am Brett]. Nichts kommt von selbst drauf: Gemüse und Käse nimmst du portionsweise an der Kühltheke und legst sie am Brett drauf [E]. Soßen: Flasche am Spender nehmen, am Brett draufspritzen [E] und zurückstellen. Mit dem Brot in der Hand geht beides auch direkt an der Station. Grüne Häkchen zeigen, was schon passt.", en = "Put the meat from the pan on the bread [E at the board]. Nothing lands on it by itself: take vegetables and cheese one portion at a time from the cold counter and put them on at the board [E]. Sauces: take the bottle from its dispenser, squeeze it on at the board [E] and put it back. With the bread in your hand both also work right at the station. Green ticks show what is already right." },
 	tut_6 = { de = "Hol den Brot-Deckel aus der Brotstation [E], schließ das Brot damit am Brett und pack es ein. Es kommt auf dein Tablett vorne am Brett.", en = "Get the bread top from the bread station [E], close the bread with it at the board and pack it. It goes on your tray at the front of the board." },
 	tut_8 = { de = "Super! Du hast Geld verdient. Zutaten werden verbraucht – im Lagerraum oder in der Lieferanten-App am Laptop kannst du nachbestellen. Neue Zutaten & Geräte kaufst du am Laptop im Shop-Ausbau – die NÄCHSTEN ZIELE links zeigen dir den Weg. Um 22 Uhr Laden an der Tür absperren. Viel Erfolg!", en = "Great! You earned money. Ingredients get used up – restock in the storage room or with the supplier app on the laptop. Buy new ingredients & equipment in Shop Upgrades on the laptop – the NEXT GOALS on the left show the way. At 22:00 lock the shop at the door. Good luck!" },
 	tut_7 = { de = "Nimm dein Tablett am Brett [E] und serviere es dem Kunden vorne an der Theke [F]!", en = "Pick up your tray at the board [E] and serve it to the customer at the counter [F]!" },

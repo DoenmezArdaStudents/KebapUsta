@@ -79,7 +79,7 @@ end
 
 local function handsBusyNoTray(): boolean
 	local ps = State.player
-	local held = ps ~= nil and (heldMeal() or ps.bowlAt == "hand" or ps.lid == true or ps.sauce ~= nil)
+	local held = ps ~= nil and (heldMeal() or ps.bowlAt == "hand" or ps.lid == true or ps.sauce ~= nil or ps.portion ~= nil)
 	return held or game:GetService("Players").LocalPlayer:GetAttribute("Carry") ~= nil
 end
 
@@ -171,6 +171,7 @@ local function refreshStation(e: Entry)
 			prompt.Enabled = not handsBusy()
 		end
 	elseif kind == "veg" or kind == "cheese" then
+		-- one portion into the hand (to the board) / back; with the bread in your hand straight into it
 		local def = IngredientData.Find(item)
 		local count = 0
 		if m then
@@ -180,9 +181,18 @@ local function refreshStation(e: Entry)
 				count = m.cheese
 			end
 		end
-		prompt.ActionText = L("p_add") .. (count > 0 and string.format(" (%d→%d)", count, count + 1) or "")
+		local more = count > 0 and string.format(" (%d→%d)", count, count + 1) or ""
 		prompt.ObjectText = (def and def.name[State.lang] or item) .. stockText(def and def.stock or item)
-		prompt.Enabled = canAdd()
+		if ps.portion and ps.portion.id == item then
+			prompt.ActionText = L("p_portion_back")
+			prompt.Enabled = true
+		elseif heldMeal() then
+			prompt.ActionText = L("p_portion_in") .. more
+			prompt.Enabled = canAdd()
+		else
+			prompt.ActionText = L("p_take")
+			prompt.Enabled = not handsBusy()
+		end
 	elseif kind == "board" then
 		-- [E] main action, [R] second one; a board someone else works at stays closed
 		local i = part:GetAttribute("Board")
@@ -216,6 +226,13 @@ local function refreshStation(e: Entry)
 			if open then
 				local n = m.sauces[ps.sauce] or 0
 				e1 = { "sauce_on", L("p_sauce_on") .. (n > 0 and string.format(" (%d→%d)", n, n + 1) or ""), "🧴" }
+			end
+		elseif free and ps.portion then
+			if open then
+				local id = ps.portion.id
+				local n = ps.portion.kind == "cheese" and m.cheese or (m.veg[id] or 0)
+				local def = IngredientData.Find(id)
+				e1 = { "portion_on", L("p_portion_on") .. (n > 0 and string.format(" (%d→%d)", n, n + 1) or ""), def and def.icon or "🥬" }
 			end
 		elseif free and ps.lid then
 			if open and m.bread == "classic" then

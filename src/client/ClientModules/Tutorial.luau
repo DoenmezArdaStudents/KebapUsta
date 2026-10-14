@@ -124,6 +124,10 @@ local function compute(): (number?, string?, Instance?)
 		end
 		return 5, "tut_5", station("sauce", ps.sauce)
 	end
+	-- a vegetable / cheese portion in the hand: onto the bread at the board
+	if ps.portion then
+		return 5, "tut_5", board(myBoard)
+	end
 	for _, e in ipairs(list) do
 		if (string.sub(e.key, 1, 4) == "veg:" or string.sub(e.key, 1, 6) == "sauce:") and e.state ~= "ok" then
 			local kind = string.sub(e.key, 1, 4) == "veg:" and "veg" or "sauce"
