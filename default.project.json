@@ -1,21 +1,84 @@
 {
-  "name": "KebapUsta",
-  "tree": {
-    "$className": "DataModel",
-    "ServerScriptService": {
-      "$ignoreUnknownInstances": true,
-      "$path": "src/ServerScriptService"
-    },
-    "ReplicatedStorage": {
-      "$ignoreUnknownInstances": true,
-      "Shared": { "$path": "src/ReplicatedStorage/Shared" }
-    },
-    "StarterPlayer": {
-      "$ignoreUnknownInstances": true,
-      "StarterPlayerScripts": {
-        "$ignoreUnknownInstances": true,
-        "$path": "src/StarterPlayer/StarterPlayerScripts"
-      }
-    }
-  }
+	"name": "KebapUsta",
+	"tree": {
+		"$className": "DataModel",
+
+		"ReplicatedStorage": {
+			"Shared": {
+				"$path": "src/shared"
+			}
+		},
+
+		"ServerScriptService": {
+			"$path": "src/server"
+		},
+
+		"ServerStorage": {
+			"Models": {
+				"$path": "assets/ServerStorage/Models.rbxm"
+			}
+		},
+
+		"StarterPlayer": {
+			"$properties": {
+				"CameraMode": "LockFirstPerson",
+				"CharacterWalkSpeed": 10,
+				"CharacterUseJumpPower": true,
+				"CharacterJumpPower": 32,
+				"CharacterMaxSlopeAngle": 89,
+				"LoadCharacterAppearance": false
+			},
+			"StarterPlayerScripts": {
+				"$path": "src/client"
+			},
+			"StarterCharacter": {
+				"$path": "assets/StarterPlayer/StarterCharacter.rbxm"
+			}
+		},
+
+		"Workspace": {
+			"$properties": {
+				"StreamingEnabled": true,
+				"Gravity": 196.2,
+				"FallenPartsDestroyHeight": -500
+			},
+			"Restaurant": {
+				"$path": "assets/Workspace/Restaurant.rbxm"
+			},
+			"kebap_food": {
+				"$path": "assets/Workspace/kebap_food.rbxm"
+			},
+			"Baseplate": {
+				"$path": "assets/Workspace/Baseplate.rbxm"
+			}
+		},
+
+		"Lighting": {
+			"$properties": {
+				"Technology": "ShadowMap",
+				"Ambient": [0.27451, 0.235294, 0.215686],
+				"OutdoorAmbient": [0.470588, 0.45098, 0.431373],
+				"Brightness": 2.2,
+				"ClockTime": 12,
+				"GeographicLatitude": 48,
+				"EnvironmentDiffuseScale": 0.6,
+				"EnvironmentSpecularScale": 0.6,
+				"GlobalShadows": true,
+				"ShadowSoftness": 0.2
+			},
+			"Sky": { "$path": "assets/Lighting/Sky.rbxm" },
+			"Atmosphere": { "$path": "assets/Lighting/Atmosphere.rbxm" },
+			"SunRays": { "$path": "assets/Lighting/SunRays.rbxm" },
+			"Bloom": { "$path": "assets/Lighting/Bloom.rbxm" },
+			"DepthOfField": { "$path": "assets/Lighting/DepthOfField.rbxm" },
+			"KebapColor": { "$path": "assets/Lighting/KebapColor.rbxm" }
+		},
+
+		"TextChatService": {
+			"ChatWindowConfiguration": { "$path": "assets/TextChatService/ChatWindowConfiguration.rbxm" },
+			"ChatInputBarConfiguration": { "$path": "assets/TextChatService/ChatInputBarConfiguration.rbxm" },
+			"BubbleChatConfiguration": { "$path": "assets/TextChatService/BubbleChatConfiguration.rbxm" },
+			"ChannelTabsConfiguration": { "$path": "assets/TextChatService/ChannelTabsConfiguration.rbxm" }
+		}
+	}
 }
