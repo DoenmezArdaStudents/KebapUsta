@@ -1,0 +1,4 @@
+*.rbxl.lock
+*.rbxlx.lock
+__pycache__/
+Copy*.rbxl

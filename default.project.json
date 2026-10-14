@@ -1,0 +1,21 @@
+{
+  "name": "KebapUsta",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$ignoreUnknownInstances": true,
+      "$path": "src/ServerScriptService"
+    },
+    "ReplicatedStorage": {
+      "$ignoreUnknownInstances": true,
+      "Shared": { "$path": "src/ReplicatedStorage/Shared" }
+    },
+    "StarterPlayer": {
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$ignoreUnknownInstances": true,
+        "$path": "src/StarterPlayer/StarterPlayerScripts"
+      }
+    }
+  }
+}
