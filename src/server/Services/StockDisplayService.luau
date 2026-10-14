@@ -3,15 +3,30 @@
 -- Each display is built lazily from the station's own visuals in the Restaurant asset (they serve as
 -- templates and are replaced by parts in a "StockDisplay" folder):
 --   bread crates   one bread / flatbread / box per unit
+--   salad bar      the veg / cheese level in each pan sinks with every portion used
 -- Displays never show more than Config.Stock.BaseCapacity; beyond that (storage upgrade) they stay full.
 
 local CollectionService = game:GetService("CollectionService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local IngredientData = require(Shared.IngredientData)
 local RestaurantService = require(script.Parent.RestaurantService)
 
 local StockDisplayService = {}
+
+-- units the display shows: whole units, capped at what a full display holds
+local function stockOf(stockId: string): number
+	return math.clamp(math.floor(RestaurantService.GetStock(stockId)), 0, Config.Stock.BaseCapacity)
+end
+
+-- display parts are pure visuals: they must not block players or the stations' prompts
+local function decor(p: BasePart)
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+end
 
 ---------------------------------------------------------------------------
 -- Bread crates: the display shows the real stock – one bread / flatbread / box per unit, up to
@@ -109,7 +124,7 @@ local function crateItem(c: Crate, i: number): { BasePart }
 end
 
 local function updateCrate(c: Crate)
-	local n = math.clamp(math.floor(RestaurantService.GetStock(CRATE_STOCK[c.kind])), 0, Config.Stock.BaseCapacity)
+	local n = stockOf(CRATE_STOCK[c.kind])
 	local old = c.shown or 0
 	if old == n then
 		return
@@ -139,11 +154,88 @@ local function updateCrate(c: Crate)
 end
 
 ---------------------------------------------------------------------------
+-- Salad bar pans: the tray gets a rim, so it reads as a pan. The bed of veg sinks from the rim down
+-- to the tray with every portion used; below SPARSE_BELOW portions the pieces on top thin out, and
+-- an empty pan shows only the bare tray. The tray's own Fill + VegPiece parts are the templates.
+---------------------------------------------------------------------------
+local PAN_RIM = 0.35 -- rim height above the tray
+local PAN_WALL = 0.06
+local BED_MIN = 0.02 -- bed thickness with a single portion left
+local SPARSE_BELOW = 10
+
+type PanPiece = { part: BasePart, rot: CFrame, x: number, z: number, h: number }
+type Pan = { tray: BasePart, stock: string, bed: BasePart, pieces: { PanPiece }, folder: Folder, x: number, z: number, shown: number? }
+
+local function setupPan(tray: BasePart): Pan | false
+	local def = IngredientData.Find(tray:GetAttribute("Item"))
+	local fill = tray:FindFirstChild("Fill")
+	if not def or not fill or not fill:IsA("BasePart") then
+		return false
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "StockDisplay"
+	folder.Parent = tray
+	local rel = tray.CFrame:ToObjectSpace(fill.CFrame)
+	local top = tray.Size.Y / 2
+	local inner = fill.Size
+	local walls = {
+		{ Vector3.new(inner.X + PAN_WALL * 2, PAN_RIM, PAN_WALL), 0, (inner.Z + PAN_WALL) / 2 },
+		{ Vector3.new(inner.X + PAN_WALL * 2, PAN_RIM, PAN_WALL), 0, -(inner.Z + PAN_WALL) / 2 },
+		{ Vector3.new(PAN_WALL, PAN_RIM, inner.Z), (inner.X + PAN_WALL) / 2, 0 },
+		{ Vector3.new(PAN_WALL, PAN_RIM, inner.Z), -(inner.X + PAN_WALL) / 2, 0 },
+	}
+	for _, w in ipairs(walls) do
+		local wall = Instance.new("Part")
+		wall.Name = "PanRim"
+		wall.Size = w[1]
+		wall.CFrame = tray.CFrame * CFrame.new(rel.X + w[2], top + PAN_RIM / 2, rel.Z + w[3])
+		wall.Color = tray.Color
+		wall.Material = tray.Material
+		decor(wall)
+		wall.Parent = folder
+	end
+	local pieces: { PanPiece } = {}
+	for _, c in ipairs(fill:GetChildren()) do
+		if c:IsA("BasePart") then
+			local p = fill.CFrame:ToObjectSpace(c.CFrame)
+			local part = c:Clone()
+			decor(part)
+			table.insert(pieces, { part = part, rot = p - p.Position, x = rel.X + p.X, z = rel.Z + p.Z, h = p.Y - fill.Size.Y / 2 })
+		end
+	end
+	local bed = fill:Clone()
+	bed:ClearAllChildren()
+	decor(bed)
+	fill:Destroy()
+	return { tray = tray, stock = def.stock, bed = bed, pieces = pieces, folder = folder, x = rel.X, z = rel.Z }
+end
+
+local function updatePan(pan: Pan)
+	local n = stockOf(pan.stock)
+	if pan.shown == n then
+		return
+	end
+	pan.shown = n
+	local h = BED_MIN + (PAN_RIM - 0.04 - BED_MIN) * (n - 1) / (Config.Stock.BaseCapacity - 1)
+	local top = pan.tray.Size.Y / 2
+	pan.bed.Size = Vector3.new(pan.bed.Size.X, h, pan.bed.Size.Z)
+	pan.bed.CFrame = pan.tray.CFrame * CFrame.new(pan.x, top + h / 2, pan.z)
+	pan.bed.Parent = if n > 0 then pan.folder else nil
+	local visible = math.ceil(#pan.pieces * math.min(n / SPARSE_BELOW, 1))
+	for i, p in ipairs(pan.pieces) do
+		p.part.CFrame = pan.tray.CFrame * CFrame.new(p.x, top + h + p.h, p.z) * p.rot
+		p.part.Parent = if i <= visible then pan.folder else nil
+	end
+end
+
+---------------------------------------------------------------------------
 -- Update
 ---------------------------------------------------------------------------
 type Kind = { setup: (BasePart) -> any, update: (any) -> () }
 local KINDS: { [string]: Kind } = {
 	bread = { setup = setupCrate, update = updateCrate },
+	veg = { setup = setupPan, update = updatePan },
+	cheese = { setup = setupPan, update = updatePan },
 }
 local displays: { [BasePart]: any } = {} -- station -> display state, false if it can't show stock
 
