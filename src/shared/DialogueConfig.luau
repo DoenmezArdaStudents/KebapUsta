@@ -12,12 +12,39 @@ local function L(de, en)
 	return { de = de, en = en }
 end
 
+-- customer first names by sex ("m" / "w", as in Shared/CustomerLooks), so name and look match
 DialogueConfig.FirstNames = {
-	"Lukas", "Anna", "Mehmet", "Sophie", "Florian", "Elif", "David", "Lena", "Emre", "Julia", "Stefan",
-	"Ayşe", "Maximilian", "Katharina", "Burak", "Sarah", "Tobias", "Zeynep", "Johanna", "Kerem", "Felix",
-	"Marie", "Can", "Laura", "Dominik", "Selin", "Paul", "Hannah", "Ali", "Theresa", "Jakob", "Nina",
-	"Marko", "Ivana", "Peter", "Gerti", "Franz", "Resi", "Moritz", "Leonie",
+	m = {
+		"Lukas", "Mehmet", "Florian", "David", "Emre", "Stefan", "Maximilian", "Burak", "Tobias", "Kerem",
+		"Felix", "Can", "Dominik", "Paul", "Ali", "Jakob", "Marko", "Peter", "Franz", "Moritz",
+	},
+	w = {
+		"Anna", "Sophie", "Elif", "Lena", "Julia", "Ayşe", "Katharina", "Sarah", "Zeynep", "Johanna",
+		"Marie", "Laura", "Selin", "Hannah", "Theresa", "Nina", "Ivana", "Gerti", "Resi", "Leonie",
+	},
 }
+
+function DialogueConfig.RandomName(rng: Random, sex: string): string
+	local list = DialogueConfig.FirstNames[sex] or DialogueConfig.FirstNames.m
+	return list[rng:NextInteger(1, #list)]
+end
+
+-- sex of a known name ("Frau …" / "Herr …" or a first name from the lists), nil if unknown
+function DialogueConfig.SexOfName(name: string?): string?
+	if not name then
+		return nil
+	elseif name:match("^Frau ") then
+		return "w"
+	elseif name:match("^Herr ") then
+		return "m"
+	end
+	for sex, list in DialogueConfig.FirstNames do
+		if table.find(list, name) then
+			return sex
+		end
+	end
+	return nil
+end
 
 -- Personalities shape patience, pickiness, tips and dialogue tone
 DialogueConfig.Personalities = {

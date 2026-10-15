@@ -7,6 +7,7 @@
 --     to that part and coloured per look
 --   * free Roblox catalog items (ServerStorage.CustomerAccessories, named by asset id): cloned,
 --     texture removed, coloured flat, worn via Humanoid:AddAccessory
+-- Skin segments that the clothes cover completely (CustomerLooks `covers`) are left out.
 -- Everything it adds is tagged with the attribute LookPart (meshes) or is an Accessory, so Dress /
 -- Strip can remove it again when a pooled rig is reused.
 
@@ -111,6 +112,7 @@ function CustomerAppearance.Dress(rig: Model, look, parts: Folder?, accessories:
 	end
 
 	local idx = index(parts)
+	local covered = CustomerLooks.CoveredParts(look) -- no skin under clothes (pokes through when joints bend)
 	for _, piece in look.pieces do
 		local def = CustomerLooks.ITEMS[piece.id]
 		if not def then
@@ -122,8 +124,9 @@ function CustomerAppearance.Dress(rig: Model, look, parts: Folder?, accessories:
 			for item, role in def.items do
 				local hex = colors[role] or colors.main
 				for _, template in idx[item] or {} do
-					local seg = rig:FindFirstChild(template:GetAttribute("Part")) :: BasePart?
-					if not seg then
+					local partName = template:GetAttribute("Part")
+					local seg = rig:FindFirstChild(partName) :: BasePart?
+					if not seg or (item == "Body" and covered[partName]) then
 						continue
 					end
 					local p = template:Clone()

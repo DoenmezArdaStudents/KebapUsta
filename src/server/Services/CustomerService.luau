@@ -332,15 +332,28 @@ local function randomLook(vip: boolean, r: Random?)
 	}
 end
 
--- new look from the seed; falls back to the old look if the assets are missing
-local function dressSeeded(rig: Model, lookSeed: number, vip: boolean)
+-- new look from the seed; falls back to the old look if the assets are missing.
+-- sex: force "m" / "w" (a known name); returns the sex of the look so the name can match it
+local function dressSeeded(rig: Model, lookSeed: number, vip: boolean, sex: string?): string
 	if CustomerAppearance.Available() then
-		local look = CustomerLooks.Roll(Random.new(lookSeed), { vip = vip })
+		local look = CustomerLooks.Roll(Random.new(lookSeed), { vip = vip, sex = sex })
 		if CustomerAppearance.Dress(rig, look) then
-			return
+			return look.sex
 		end
 	end
 	dress(rig, randomLook(vip, Random.new(lookSeed)))
+	return sex or (Random.new(lookSeed):NextNumber() < 0.5 and "w" or "m")
+end
+
+-- what offsets a joint like Motor6D.C0 does: C0 itself, or the parent-side Attachment0 of an
+-- AnimationConstraint (rigs from CreateHumanoidModelFromDescription use AnimationConstraints now)
+local function jointOffset(m: Instance): (Instance?, string?)
+	if m:IsA("Motor6D") then
+		return m, "C0"
+	elseif m:IsA("AnimationConstraint") and m.Attachment0 then
+		return m.Attachment0, "CFrame"
+	end
+	return nil, nil
 end
 
 local function newRig(): Model?
@@ -396,10 +409,12 @@ local function releaseRig(rig: Model)
 		for a in pairs(rig:GetAttributes()) do
 			rig:SetAttribute(a, nil)
 		end
-		-- undo slap / rant joint offsets
+		-- undo gesture / slap joint offsets
 		for _, m in ipairs(rig:GetDescendants()) do
-			if m:IsA("Motor6D") and m:GetAttribute("BaseC0") then
-				m.C0 = m:GetAttribute("BaseC0")
+			local base = m:GetAttribute("BaseC0")
+			local target, prop = jointOffset(m)
+			if typeof(base) == "CFrame" and target and prop then
+				(target :: any)[prop] = base
 			end
 		end
 		CollectionService:RemoveTag(rig, "Customer")
@@ -434,6 +449,7 @@ local function setupAnims(c)
 				track.Looped = true
 				track.Priority = Enum.AnimationPriority.Action
 			else
+				track.Looped = false -- wave / point / cheer / laugh are looping emotes by default
 				track.Priority = Enum.AnimationPriority.Action
 			end
 		end
@@ -460,11 +476,32 @@ local function setupAnims(c)
 	end)
 end
 
-local function playOnce(c, name: string)
+-- one-shot emotes: stopped after EMOTE_TIME, not repeated within EMOTE_COOLDOWN (a wave only once
+-- per visit) and never on top of another emote. Returns whether it played.
+local EMOTE_TIME = { wave = 2.2, point = 1.6, cheer = 2.4, laugh = 2.4 }
+local EMOTE_COOLDOWN = { wave = math.huge, point = 12, cheer = 20, laugh = 15 }
+
+local function playOnce(c, name: string): boolean
 	local t = c.tracks and c.tracks[name]
-	if t then
-		t:Play(0.1)
+	if not t then
+		return false
 	end
+	c.emoteAt = c.emoteAt or {}
+	local now = os.clock()
+	if now - (c.emoteAt[name] or -math.huge) < (EMOTE_COOLDOWN[name] or 8) or now < (c.emoteBusy or 0) then
+		return false
+	end
+	local duration = EMOTE_TIME[name] or 2
+	c.emoteAt[name] = now
+	c.emoteBusy = now + duration
+	t.Looped = false
+	t:Play(0.15)
+	task.delay(duration, function()
+		if t.IsPlaying then
+			t:Stop(0.35)
+		end
+	end)
+	return true
 end
 
 ---------------------------------------------------------------------------
@@ -849,29 +886,35 @@ end
 ---------------------------------------------------------------------------
 local slapCooldown: { [Player]: number } = {}
 
-local function motor(model: Instance, partName: string, motorName: string): Motor6D?
+-- a joint of the rig (Motor6D or AnimationConstraint, see jointOffset)
+local function motor(model: Instance, partName: string, motorName: string): Instance?
 	local p = model:FindFirstChild(partName)
 	local m = p and p:FindFirstChild(motorName)
-	if m and m:IsA("Motor6D") then
+	if m and (m:IsA("Motor6D") or m:IsA("AnimationConstraint")) then
 		return m
 	end
 	return nil
 end
 
--- offset a joint (C0) and ease back; the original C0 is remembered so overlapping kicks never drift
-local function jointKick(m: Motor6D?, offset: CFrame, tIn: number, hold: number, tOut: number)
+-- offset a joint and ease back; the original offset is remembered (attribute BaseC0 on the joint)
+-- so overlapping kicks never drift. Composes with the playing animations like Motor6D.C0.
+local function jointKick(m: Instance?, offset: CFrame, tIn: number, hold: number, tOut: number)
 	if not m then
+		return
+	end
+	local target, prop = jointOffset(m)
+	if not target or not prop then
 		return
 	end
 	local base = m:GetAttribute("BaseC0")
 	if typeof(base) ~= "CFrame" then
-		base = m.C0
+		base = (target :: any)[prop]
 		m:SetAttribute("BaseC0", base)
 	end
-	TweenService:Create(m, TweenInfo.new(tIn, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { C0 = base * offset }):Play()
+	TweenService:Create(target, TweenInfo.new(tIn, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { [prop] = base * offset }):Play()
 	task.delay(tIn + hold, function()
-		if m.Parent then
-			TweenService:Create(m, TweenInfo.new(tOut, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { C0 = base }):Play()
+		if target.Parent then
+			TweenService:Create(target, TweenInfo.new(tOut, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { [prop] = base }):Play()
 		end
 	end)
 end
@@ -1352,14 +1395,10 @@ function CustomerService.TakeOrder(player: Player, c, viaLaptop: boolean?, staff
 		lines = lines,
 		vip = c.vip,
 	}) end
-	-- greeting varies: wave, a nod, or pointing at the menu board
+	-- greeting varies: wave (unless they already waved on arrival), a nod, or pointing at the menu board
 	local greet = rng:NextNumber()
-	if greet < 0.35 then
-		playOnce(c, "wave")
-	elseif greet < 0.7 then
+	if not ((greet < 0.35 and playOnce(c, "wave")) or (greet >= 0.7 and playOnce(c, "point"))) then
 		jointKick(motor(c.model, "Head", "Neck"), CFrame.Angles(math.rad(-14), 0, 0), 0.15, 0.2, 0.25)
-	else
-		playOnce(c, "point")
 	end
 	task.spawn(function()
 		for _, l in ipairs(lines) do
@@ -1533,11 +1572,12 @@ function CustomerService.Spawn(opts)
 	local pdef = DialogueConfig.Personalities[personality]
 	-- every guest gets a look seed so a future regular looks the same on every visit
 	local lookSeed = opts.lookSeed or rng:NextInteger(1, 2 ^ 30)
-	dressSeeded(rig, lookSeed, vip or opts.critic == true)
+	-- a given name (critics, regulars) decides the sex, otherwise the look does and the name follows
+	local sex = dressSeeded(rig, lookSeed, vip or opts.critic == true, DialogueConfig.SexOfName(opts.name))
 	local hum = rig:FindFirstChildOfClass("Humanoid") :: Humanoid
 	local root = rig:FindFirstChild("HumanoidRootPart") :: BasePart
 	hum.WalkSpeed = Config.Customers.WalkSpeed * (personality == "impatient" and 1.2 or 1) * rng:NextNumber(0.9, 1.1)
-	local name = opts.name or DialogueConfig.FirstNames[rng:NextInteger(1, #DialogueConfig.FirstNames)]
+	local name = opts.name or DialogueConfig.RandomName(rng, sex)
 	local decorMul = RestaurantService.UpgradeValue("decor")
 	local maxPatience = Config.Customers.BasePatience * pdef.patience * decorMul * (opts.groupSize and opts.groupSize > 1 and 1.3 or 1)
 	local eat = rng:NextNumber() < Config.Customers.EatChance

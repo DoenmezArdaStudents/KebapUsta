@@ -48,6 +48,9 @@ local SLOT_COLORS = {
 }
 
 -- sex: "m" / "w" / nil (both). weight: relative chance within the slot.
+-- covers: body segments the piece hides completely ("Arms"/"Legs"/"Feet" = both sides). Their skin
+-- is not built at all, so rigid body corners never poke through the clothing when joints bend.
+-- Only list a segment if it stays covered in every pose (crop top, short sleeves, skirt: no).
 -- needsTop: an outer layer that only fits over these tops (our tight mesh jacket would let the
 -- thicker layered catalog tops poke through).
 CustomerLooks.ITEMS = {
@@ -62,31 +65,31 @@ CustomerLooks.ITEMS = {
 	},
 
 	-- tops
-	hoodie = { slot = "top", source = "mesh", weight = 3, items = { Hoodie = "main", HoodieAccent = "accent" } },
-	tee = { slot = "top", source = "catalog", asset = 9112474888, weight = 3 }, -- Basic T-Shirt
-	longsleeve = { slot = "top", source = "catalog", asset = 7178740556, weight = 1 }, -- Baseball Long Sleeve
-	sweater = { slot = "top", source = "catalog", asset = 9240758221, weight = 2 }, -- Knit Sweater
+	hoodie = { slot = "top", source = "mesh", weight = 3, items = { Hoodie = "main", HoodieAccent = "accent" }, covers = { "UpperTorso", "LowerTorso", "UpperArms", "LowerArms" } },
+	tee = { slot = "top", source = "catalog", asset = 9112474888, weight = 3, covers = { "UpperTorso" } }, -- Basic T-Shirt
+	longsleeve = { slot = "top", source = "catalog", asset = 7178740556, weight = 1, covers = { "UpperTorso", "UpperArms", "LowerArms" } }, -- Baseball Long Sleeve
+	sweater = { slot = "top", source = "catalog", asset = 9240758221, weight = 2, covers = { "UpperTorso", "UpperArms", "LowerArms" } }, -- Knit Sweater
 	tietop = { slot = "top", source = "catalog", asset = 9240752338, weight = 2, sex = "w" }, -- Tie-Front Top
 
 	-- outer layer (optional)
-	jacket = { slot = "outer", source = "mesh", weight = 3, items = { Jacket = "main" }, needsTop = { hoodie = true } },
-	leather = { slot = "outer", source = "catalog", asset = 6984767443, weight = 2 }, -- Leather Jacket
-	leather_collar = { slot = "outer", source = "catalog", asset = 7192547628, weight = 1 }, -- Collared Leather Jacket
-	denim_jacket = { slot = "outer", source = "catalog", asset = 8516609675, weight = 1 }, -- Denim Jacket
-	parka = { slot = "outer", source = "catalog", asset = 8648397446, weight = 1 }, -- Parka
-	coat = { slot = "outer", source = "catalog", asset = 8516638468, weight = 1 }, -- Business Coat
-	trench = { slot = "outer", source = "catalog", asset = 8648380153, weight = 1, colors = { "sand", "brown", "grey" } }, -- Trench Coat
-	zip_hoodie = { slot = "outer", source = "catalog", asset = 7192553841, weight = 1, colors = { "grey", "dark", "red" } }, -- Zip Hoodie
+	jacket = { slot = "outer", source = "mesh", weight = 3, items = { Jacket = "main" }, needsTop = { hoodie = true }, covers = { "UpperArms" } },
+	leather = { slot = "outer", source = "catalog", asset = 6984767443, weight = 2, covers = { "UpperArms", "LowerArms" } }, -- Leather Jacket
+	leather_collar = { slot = "outer", source = "catalog", asset = 7192547628, weight = 1, covers = { "UpperArms", "LowerArms" } }, -- Collared Leather Jacket
+	denim_jacket = { slot = "outer", source = "catalog", asset = 8516609675, weight = 1, covers = { "UpperArms", "LowerArms" } }, -- Denim Jacket
+	parka = { slot = "outer", source = "catalog", asset = 8648397446, weight = 1, covers = { "UpperArms", "LowerArms" } }, -- Parka
+	coat = { slot = "outer", source = "catalog", asset = 8516638468, weight = 1, covers = { "UpperArms", "LowerArms" } }, -- Business Coat
+	trench = { slot = "outer", source = "catalog", asset = 8648380153, weight = 1, colors = { "sand", "brown", "grey" }, covers = { "UpperArms", "LowerArms" } }, -- Trench Coat
+	zip_hoodie = { slot = "outer", source = "catalog", asset = 7192553841, weight = 1, colors = { "grey", "dark", "red" }, covers = { "UpperArms", "LowerArms" } }, -- Zip Hoodie
 
 	-- bottoms
-	jeans = { slot = "bottom", source = "mesh", weight = 4, items = { Pants = "main" }, colors = { "denim", "dark", "greyDark" } },
-	cargo = { slot = "bottom", source = "catalog", asset = 6984740059, weight = 2, colors = { "brown", "greyDark", "sand", "dark" } }, -- Cargo Pants
-	sweats = { slot = "bottom", source = "catalog", asset = 7192664790, weight = 1, colors = { "greyDark", "dark" } }, -- Casual Sweats
-	shorts = { slot = "bottom", source = "catalog", asset = 9174391966, weight = 1, colors = { "sand", "brown", "greyDark" } }, -- Bermuda Shorts
-	skirt = { slot = "bottom", source = "catalog", asset = 9240776381, weight = 3, sex = "w", colors = { "red", "brown", "dark", "sand", "between" } }, -- Long Ruffle Skirt
+	jeans = { slot = "bottom", source = "mesh", weight = 4, items = { Pants = "main" }, colors = { "denim", "dark", "greyDark" }, covers = { "LowerTorso", "UpperLegs", "LowerLegs" } },
+	cargo = { slot = "bottom", source = "catalog", asset = 6984740059, weight = 2, colors = { "brown", "greyDark", "sand", "dark" }, covers = { "LowerTorso", "UpperLegs", "LowerLegs" } }, -- Cargo Pants
+	sweats = { slot = "bottom", source = "catalog", asset = 7192664790, weight = 1, colors = { "greyDark", "dark" }, covers = { "LowerTorso", "UpperLegs", "LowerLegs" } }, -- Casual Sweats
+	shorts = { slot = "bottom", source = "catalog", asset = 9174391966, weight = 1, colors = { "sand", "brown", "greyDark" }, covers = { "LowerTorso", "UpperLegs" } }, -- Bermuda Shorts
+	skirt = { slot = "bottom", source = "catalog", asset = 9240776381, weight = 3, sex = "w", colors = { "red", "brown", "dark", "sand", "between" }, covers = { "LowerTorso" } }, -- Long Ruffle Skirt
 
 	-- shoes
-	sneakers = { slot = "shoes", source = "mesh", items = { Shoe = "main", ShoeSole = "sole", ShoeAccent = "accent" } },
+	sneakers = { slot = "shoes", source = "mesh", items = { Shoe = "main", ShoeSole = "sole", ShoeAccent = "accent" }, covers = { "Feet" } },
 
 	-- hair (catalog hair is free Roblox hair; the colour comes from the look)
 	crop = { slot = "hair", source = "mesh", sex = "m", weight = 4, items = { Hair = "hair" } },
@@ -120,6 +123,31 @@ CustomerLooks.CHANCE = {
 	hat = 0.2,
 	face = 0.08,
 }
+
+-- R15 parts behind the `covers` names
+CustomerLooks.COVER_PARTS = {
+	UpperTorso = { "UpperTorso" },
+	LowerTorso = { "LowerTorso" },
+	UpperArms = { "LeftUpperArm", "RightUpperArm" },
+	LowerArms = { "LeftLowerArm", "RightLowerArm" },
+	UpperLegs = { "LeftUpperLeg", "RightUpperLeg" },
+	LowerLegs = { "LeftLowerLeg", "RightLowerLeg" },
+	Feet = { "LeftFoot", "RightFoot" },
+}
+
+-- R15 parts whose skin a look does not need (fully covered by its clothes)
+function CustomerLooks.CoveredParts(look): { [string]: boolean }
+	local covered = {}
+	for _, piece in look.pieces do
+		local def = CustomerLooks.ITEMS[piece.id]
+		for _, name in (def and def.covers) or {} do
+			for _, part in CustomerLooks.COVER_PARTS[name] do
+				covered[part] = true
+			end
+		end
+	end
+	return covered
+end
 
 -- every catalog asset id the looks can use (for baking ServerStorage.CustomerAccessories)
 function CustomerLooks.CatalogAssets(): { number }
@@ -190,9 +218,12 @@ end
 
 -- Roll a complete look. Only `rng` is used, so the same seed always gives the same look.
 -- opts.vip: VIPs and critics are recognisable – dark coat over a sweater and a fedora.
-function CustomerLooks.Roll(rng: Random, opts: { vip: boolean? }?)
+-- opts.sex: force "m" / "w" (e.g. to match a known name); the rest of the roll stays the same.
+function CustomerLooks.Roll(rng: Random, opts: { vip: boolean?, sex: string? }?)
 	local vip = opts ~= nil and opts.vip == true
-	local sex = rng:NextNumber() < CustomerLooks.CHANCE.w and "w" or "m"
+	local sexRoll = rng:NextNumber()
+	local sex = (opts and (opts.sex == "m" or opts.sex == "w") and opts.sex)
+		or (sexRoll < CustomerLooks.CHANCE.w and "w" or "m")
 	local skin = CustomerLooks.SKIN[rng:NextInteger(1, #CustomerLooks.SKIN)]
 	local hairIndex = pickWeighted(rng, { 1, 2, 3, 4, 5, 6, 7, 8 }, function(i)
 		return CustomerLooks.HAIR_WEIGHTS[i]
