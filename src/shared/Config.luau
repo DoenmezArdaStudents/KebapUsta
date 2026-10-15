@@ -258,6 +258,13 @@ Config.Sounds = {
 	-- back door (Creator Store, Dino_B9; loaded and verified in Studio)
 	door_open = { id = "rbxassetid://7309105153", volume = 0.5, pitchVar = 0.05 },
 	door_close = { id = "rbxassetid://7309106429", volume = 0.45, pitchVar = 0.05 },
+	-- delivery van (Creator Store; loaded and verified in Studio): engine loop, reverse beeper loop,
+	-- air brake, rear cargo doors
+	van_engine = { id = "rbxassetid://132909779540049", volume = 0.35 },
+	van_beep = { id = "rbxassetid://5471337533", volume = 0.35 },
+	van_brake = { id = "rbxassetid://109083794861112", volume = 0.45 },
+	van_door_open = { id = "rbxassetid://9112987710", volume = 0.5 },
+	van_door_close = { id = "rbxassetid://106783007480793", volume = 0.5 },
 }
 
 Config.Achievements = {
