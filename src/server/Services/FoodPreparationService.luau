@@ -257,6 +257,74 @@ local function piece(parent: Instance, name: string, cf: CFrame, s: number, tint
 	return p
 end
 
+-- Finished products (art/food/build_finished.py, issue #4): a closed meal is one clean model instead
+-- of loose ingredient pieces. Offsets = bounding-box centre of each mesh relative to the product's
+-- ground centre (printed by the Blender script).
+local FINISHED = {
+	KebapBread = Vector3.new(0, 0.535, 0.001),
+	KebapFilling = Vector3.new(0.027, 1.124, 0.034),
+	KebapPaper = Vector3.new(0, 0.46, -0.001),
+	DuerumRolled = Vector3.new(0, 0.39, 0),
+	DuerumFoil = Vector3.new(0.595, 0.39, -0.001),
+	DuerumEnd = Vector3.new(-1.077, 0.408, -0.007),
+	BoxClosed = Vector3.new(0, 0.362, -0.02),
+}
+
+local function hasFinished(meal): boolean
+	local lib = foodTemplates()
+	if not lib or not meal.closed then
+		return false
+	end
+	local need = meal.bread == "classic" and "KebapBread" or (meal.bread == "duerum" and "DuerumFoil" or "BoxClosed")
+	return lib:FindFirstChild(need) ~= nil
+end
+
+local function mealIsBurnt(meal): boolean
+	local n, sum = 0, 0
+	for _, q in ipairs(meal.meatQuality or {}) do
+		n += 1
+		sum += q
+	end
+	return n > 0 and sum / n < 0.5
+end
+
+local function buildFinished(m: Model, meal, c: (number, number, number) -> CFrame, s: number, toast: Color3)
+	local function put(name: string, tint: Color3?): BasePart?
+		local o = FINISHED[name]
+		return piece(m, name, c(o.X, o.Y, o.Z), s, tint)
+	end
+	local hasFilling = next(meal.meat) ~= nil or next(meal.veg) ~= nil or (meal.cheese or 0) > 0
+	local fillTint = mealIsBurnt(meal) and Color3.fromRGB(120, 96, 84) or nil
+	local takeaway = meal.pack == "takeaway"
+	if meal.bread == "classic" then
+		put("KebapBread", toast)
+		if hasFilling then
+			put("KebapFilling", fillTint)
+		end
+		if takeaway then
+			put("KebapPaper")
+		end
+	elseif meal.bread == "duerum" then
+		put("DuerumRolled", toast)
+		if hasFilling then
+			put("DuerumEnd", fillTint)
+		end
+		if takeaway then
+			put("DuerumFoil")
+		end
+	else
+		local box = put("BoxClosed")
+		if box and not box:FindFirstChildOfClass("SurfaceAppearance") then
+			box.Color = Color3.fromRGB(245, 245, 240)
+			box.Material = Enum.Material.SmoothPlastic
+		end
+		if takeaway then
+			-- red paper band around the closed box
+			bit(m, Vector3.new(0.4, 0.04, 1.52) * s, c(0, 0.73, 0), Color3.fromRGB(176, 52, 38))
+		end
+	end
+end
+
 local function buildMealMeshes(meal, origin: CFrame, scale: number?): Model
 	local s = scale or 1
 	local m = Instance.new("Model")
@@ -269,6 +337,12 @@ local function buildMealMeshes(meal, origin: CFrame, scale: number?): Model
 	if meal.pack == "plate" then
 		bit(m, Vector3.new(0.08, 2.8, 2.8) * s, c(0, 0.04, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(250, 250, 250), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		o = o * CFrame.new(0, 0.08 * s, 0)
+	end
+
+	if hasFinished(meal) then
+		buildFinished(m, meal, c, s, toast)
+		m.Parent = mealFolder
+		return m
 	end
 
 	local fillW, fillD, fillY = 1.2, 0.62, 0.14
