@@ -17,10 +17,12 @@ DialogueConfig.FirstNames = {
 	m = {
 		"Lukas", "Mehmet", "Florian", "David", "Emre", "Stefan", "Maximilian", "Burak", "Tobias", "Kerem",
 		"Felix", "Can", "Dominik", "Paul", "Ali", "Jakob", "Marko", "Peter", "Franz", "Moritz",
+		"Jonas", "Murat", "Tim", "Yusuf", -- (also from the old applicant list, so hired staff keep their sex)
 	},
 	w = {
 		"Anna", "Sophie", "Elif", "Lena", "Julia", "Ayşe", "Katharina", "Sarah", "Zeynep", "Johanna",
 		"Marie", "Laura", "Selin", "Hannah", "Theresa", "Nina", "Ivana", "Gerti", "Resi", "Leonie",
+		"Mia",
 	},
 }
 

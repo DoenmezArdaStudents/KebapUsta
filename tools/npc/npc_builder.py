@@ -11,7 +11,7 @@ Usage (from the repo root):
     --upto N  run steps 1..N (every run starts from an empty scene)
     --render  render a check sheet after the last step (--views front,side,threeq,back)
     --studio  write mesh data for the Studio preview without upload (out/studio/, see studio_preview.luau)
-    --fbx     write out/<npc>.fbx (for the Studio 3D Importer)
+    --fbx     write out/<npc>.fbx (for the Studio 3D Importer); --fbx-items Tee,Apron,… only those items
 
 Steps
     1 scene, units, collections        5 face, hair, accessories
@@ -134,12 +134,23 @@ CONFIG = {
                 # hood lying flat on the back: (z below the shoulder line, half width, thickness)
                 "hood_bag": [(0.0, 0.36, 0.035), (-0.18, 0.40, 0.05), (-0.36, 0.30, 0.045), (-0.48, 0.12, 0.025)],
             },
+            # work clothes (staff, drivers): short sleeves ending at sleeve_z on the upper arm.
+            # No neck rib: the head overhangs the neck opening (it is wider than the torso is deep).
+            "tee": {"item": "Tee", "offset": 0.025, "hem_z": 2.10, "sleeve_z": 3.45, "collar": False},
+            # polo: collar wings on the chest below the chin (the rest of the collar would be under the head), button placket
+            "polo": {"item": "Polo", "offset": 0.025, "hem_z": 2.10, "sleeve_z": 3.45, "collar": True,
+                     # wing rows (z, x inner, x outer), top to tip
+                     "wing": [(4.035, 0.03, 0.34), (3.92, 0.06, 0.30), (3.80, 0.13, 0.18)],
+                     "placket": (3.55, 4.0, 0.055), "buttons": [3.68, 3.86]},
         },
         "outer": {
             "jacket_open": {
                 "offset": 0.065, "thickness": 0.02, "sleeve_offset": 0.06, "open_x": 0.27,
                 "hem_z": 2.0, "sleeve_end_z": 2.43, "lapels": True, "placket": True, "placket_lower": False,
             },
+            # hi-vis vest (drivers): no sleeves; `offset` at front/back, thinner at the sides where the
+            # arms hang; reflective stripes (accent) around the torso
+            "vest": {"offset": 0.07, "side_off": 0.04, "hem_z": 2.14, "stripes": [(2.50, 2.60), (2.82, 2.92)]},
         },
         "bottom": {
             "jeans": {"offset": 0.025, "turn_up": True, "cuff_z": (0.25, 0.35)},
@@ -196,16 +207,55 @@ CONFIG = {
             # low ponytail out of the back of the head (for women under hats): path (y, z) + radii
             "tail": {"path": [(0.50, 4.64), (0.66, 4.56), (0.74, 4.36), (0.73, 4.14), (0.67, 4.0)],
                      "radii": [0.13, 0.14, 0.125, 0.095, 0.04], "flat": 0.9},
+            # classic Usta moustache: thick over the upper lip, the ends droop past the mouth corners
+            # (left half, x from the centre; mirrored)
+            "mustache": {"path": [(0.0, 4.478), (0.06, 4.482), (0.12, 4.47), (0.17, 4.44), (0.20, 4.39), (0.21, 4.35)],
+                         "radii": [0.030, 0.034, 0.032, 0.027, 0.020, 0.012], "flat": 0.75},
+            # short full beard: shell over jaw and chin, up the sides to the sideburns, below the mouth
+            # at the front. edge: angle from the front -> upper edge z; worn with the moustache
+            "beard": {"cols": [-104, -92, -80, -66, -52, -38, -24, -12, 0, 12, 24, 38, 52, 66, 80, 92, 104],
+                      "edge": [(0, 4.34), (13, 4.345), (22, 4.40), (34, 4.48), (50, 4.54), (66, 4.58), (80, 4.63), (92, 4.66)],
+                      "rows": [0.0, 0.5, 1.0], "chin": [4.07, 4.02, 3.995],
+                      "off": [0.012, 0.03, 0.038, 0.036, 0.025, 0.012], "inner": -0.012},
+        },
+        "accessory": {
+            # bib apron: bib on the chest, straps over the shoulders down the back to the waist tie (bow),
+            # skirt split per leg (front panels follow the legs when walking)
+            "apron": {"offset": 0.05, "thickness": 0.02, "bib_top": 3.72, "bib_w": (0.62, 0.40),
+                      "pocket": (2.95, 3.30, 0.24), "strap_x": 0.66, "strap_r": 0.04, "tie_z": (2.26, 2.36),
+                      "skirt_w": 0.93, "skirt_z": 1.25},
+            # disposable gloves (Glove, the hand) and the long cuff of rubber gloves (GloveCuff, forearm)
+            "gloves": {"offset": 0.018, "cuff_z": 2.66},
+            # held in the left hand by its back edge, clip at the front (not mirrored)
+            "clipboard": {"board": ((1.5, -0.25, 1.70), (0.03, 0.5, 0.36)),
+                          "paper": ((1.535, -0.27, 1.66), (0.008, 0.42, 0.30)),
+                          "clip": ((1.5, -0.62, 2.04), (0.055, 0.11, 0.05))},
         },
     },
     # ---------------------------------------------------------------- variants (shared mesh set)
     # Extra pieces built for every NPC but hidden in renders: the game picks them per look
-    # (Shared/CustomerLooks). kind = "hair" or "face", colours as in the NPC entries.
+    # (Shared/CustomerLooks). kind = a garment type, "hair", "face" or "accessory"; colours as in the
+    # NPC entries (materials from the NPC or from variant_materials). A piece the NPC already wears
+    # is not built twice.
     "variants": [
         {"kind": "hair", "style": "buzz", "colors": {"main": "MAT_Hair"}},
         {"kind": "hair", "style": "tail", "colors": {"main": "MAT_Hair"}},
         {"kind": "face", "style": "feminine", "colors": {"brows": "MAT_Hair", "lashes": "MAT_Eyes"}},
+        {"kind": "hair", "style": "mustache", "colors": {"main": "MAT_Hair"}},
+        {"kind": "hair", "style": "beard", "colors": {"main": "MAT_Hair"}},
+        {"kind": "top", "style": "tee", "colors": {"main": "MAT_Uniform"}},
+        {"kind": "top", "style": "polo", "colors": {"main": "MAT_Polo", "accent": "MAT_Apron"}},
+        {"kind": "outer", "style": "vest", "colors": {"main": "MAT_Vest", "accent": "MAT_Reflect"}},
+        {"kind": "accessory", "style": "apron", "colors": {"main": "MAT_Apron"}},
+        {"kind": "accessory", "style": "gloves", "colors": {"main": "MAT_Glove"}},
+        {"kind": "accessory", "style": "clipboard", "colors": {"main": "MAT_Board", "paper": "MAT_Paper", "clip": "MAT_Metal"}},
     ],
+    # materials of the variants (default colours; the game recolours every piece per look)
+    "variant_materials": {
+        "MAT_Uniform": ("#1E1E20", 0.95), "MAT_Polo": ("#2E2E30", 0.9), "MAT_Apron": ("#9A2E2B", 0.9),
+        "MAT_Vest": ("#D9622B", 0.8), "MAT_Reflect": ("#C8CACC", 0.4), "MAT_Glove": ("#151516", 0.5),
+        "MAT_Board": ("#7B5A3F", 0.7), "MAT_Paper": ("#EDE9E0", 0.9), "MAT_Metal": ("#B8BABD", 0.35),
+    },
     # ---------------------------------------------------------------- NPCs
     "npcs": {
         "npc01": {
@@ -240,8 +290,85 @@ CONFIG = {
             "hair": {"style": "short_crop", "enabled": True, "colors": {"main": "MAT_Hair"}},
             "accessories": [],
         },
+        # check renders of the work clothes (the game builds staff from the npc01 set + variants)
+        "staff01": {
+            "description": "Kebab carver: work tee, apron, gloves, moustache",
+            "materials": {
+                "MAT_Skin": ("#C08A62", 0.85), "MAT_Hair": ("#151516", 0.9), "MAT_Pants": ("#232325", 0.95),
+                "MAT_Shoes": ("#151516", 0.9), "MAT_Shoes_Sole": ("#2E2E30", 0.9), "MAT_Eyes": ("#231B17", 0.4),
+                "MAT_EyeShine": ("#FFFFFF", 0.3), "MAT_Mouth": ("#5A2A24", 0.7),
+            },
+            "skin": "MAT_Skin",
+            "clothing": [
+                {"type": "top", "style": "tee", "enabled": True, "colors": {"main": "MAT_Uniform"}},
+                {"type": "bottom", "style": "jeans", "enabled": True, "colors": {"main": "MAT_Pants"}},
+                {"type": "shoes", "style": "sneaker", "enabled": True,
+                 "colors": {"main": "MAT_Shoes", "sole": "MAT_Shoes_Sole", "accent": "MAT_Shoes"}},
+            ],
+            "face": {"style": "classic_smile", "enabled": True,
+                     "colors": {"eyes": "MAT_Eyes", "shine": "MAT_EyeShine", "brows": "MAT_Hair",
+                                "nose": "MAT_Skin", "mouth": "MAT_Mouth"}},
+            "hair": {"style": "short_crop", "enabled": True, "colors": {"main": "MAT_Hair"}},
+            "accessories": [],
+            "extras": [
+                {"kind": "accessory", "style": "apron", "colors": {"main": "MAT_Apron"}},
+                {"kind": "accessory", "style": "gloves", "colors": {"main": "MAT_Glove"}},
+                {"kind": "hair", "style": "mustache", "colors": {"main": "MAT_Hair"}},
+            ],
+        },
+        "manager01": {
+            "description": "Shift manager: polo, clipboard, beard",
+            "materials": {
+                "MAT_Skin": ("#E8BE9C", 0.85), "MAT_Hair": ("#5A3E2B", 0.9), "MAT_Pants": ("#2F3B52", 0.95),
+                "MAT_Shoes": ("#151516", 0.9), "MAT_Shoes_Sole": ("#2E2E30", 0.9), "MAT_Eyes": ("#231B17", 0.4),
+                "MAT_EyeShine": ("#FFFFFF", 0.3), "MAT_Mouth": ("#5A2A24", 0.7),
+            },
+            "skin": "MAT_Skin",
+            "clothing": [
+                {"type": "top", "style": "polo", "enabled": True, "colors": {"main": "MAT_Polo", "accent": "MAT_Apron"}},
+                {"type": "bottom", "style": "jeans", "enabled": True, "colors": {"main": "MAT_Pants"}},
+                {"type": "shoes", "style": "sneaker", "enabled": True,
+                 "colors": {"main": "MAT_Shoes", "sole": "MAT_Shoes_Sole", "accent": "MAT_Shoes"}},
+            ],
+            "face": {"style": "classic_smile", "enabled": True,
+                     "colors": {"eyes": "MAT_Eyes", "shine": "MAT_EyeShine", "brows": "MAT_Hair",
+                                "nose": "MAT_Skin", "mouth": "MAT_Mouth"}},
+            "hair": {"style": "short_crop", "enabled": True, "colors": {"main": "MAT_Hair"}},
+            "accessories": [],
+            "extras": [
+                {"kind": "accessory", "style": "clipboard", "colors": {"main": "MAT_Board", "paper": "MAT_Paper", "clip": "MAT_Metal"}},
+                {"kind": "hair", "style": "beard", "colors": {"main": "MAT_Hair"}},
+                {"kind": "hair", "style": "mustache", "colors": {"main": "MAT_Hair"}},
+            ],
+        },
+        "driver01": {
+            "description": "Delivery driver: tee, hi-vis vest, rubber gloves",
+            "materials": {
+                "MAT_Skin": ("#9C6B48", 0.85), "MAT_Hair": ("#2B1E16", 0.9), "MAT_Shirt": ("#6B6D70", 0.95),
+                "MAT_Pants": ("#2E2E30", 0.95), "MAT_Shoes": ("#5A3E2B", 0.9), "MAT_Shoes_Sole": ("#2E2E30", 0.9),
+                "MAT_Eyes": ("#231B17", 0.4), "MAT_EyeShine": ("#FFFFFF", 0.3), "MAT_Mouth": ("#5A2A24", 0.7),
+                "MAT_Rubber": ("#D9A93A", 0.5),
+            },
+            "skin": "MAT_Skin",
+            "clothing": [
+                {"type": "top", "style": "tee", "enabled": True, "colors": {"main": "MAT_Shirt"}},
+                {"type": "outer", "style": "vest", "enabled": True, "colors": {"main": "MAT_Vest", "accent": "MAT_Reflect"}},
+                {"type": "bottom", "style": "jeans", "enabled": True, "colors": {"main": "MAT_Pants"}},
+                {"type": "shoes", "style": "sneaker", "enabled": True,
+                 "colors": {"main": "MAT_Shoes", "sole": "MAT_Shoes_Sole", "accent": "MAT_Shoes"}},
+            ],
+            "face": {"style": "classic_smile", "enabled": True,
+                     "colors": {"eyes": "MAT_Eyes", "shine": "MAT_EyeShine", "brows": "MAT_Hair",
+                                "nose": "MAT_Skin", "mouth": "MAT_Mouth"}},
+            "hair": {"style": "short_crop", "enabled": True, "colors": {"main": "MAT_Hair"}},
+            "accessories": [],
+            "extras": [
+                {"kind": "accessory", "style": "gloves", "colors": {"main": "MAT_Rubber"}},
+            ],
+        },
     },
 }
+NO_MIRROR = {"Clipboard", "ClipboardPaper", "ClipboardClip"}  # one-handed items (built for the left hand)
 
 R15_PARTS = [
     "Head", "UpperTorso", "LowerTorso",
@@ -481,6 +608,22 @@ class MB:
             tans.append(t)
         self.loft(rings, path[0] - tans[0] * radii[0] * 0.6, path[-1] + tans[-1] * radii[-1] * 0.6)
 
+    def band(self, rings):
+        """Closed ring solid: consecutive rings bridged, the last one back to the first (e.g. inner /
+        outer / outer / inner = a flat band with a rectangular cross-section around a body part)."""
+        idx = [self.add(r) for r in rings]
+        for a, b in zip(idx, idx[1:] + idx[:1]):
+            self.bridge(a, b)
+
+
+def rbox(c, half, e=8.0, bevel=0.012, n=16):
+    """Rounded box around centre c with half sizes (x, y, z) – props like the clipboard."""
+    prof = Profile({"n": n, "phase": 180.0 / n, "box": {"half": (half[0], half[1], half[1]), "e": e, "bevel": bevel,
+                                                         "z": (c[2] - half[2], c[2] + half[2]), "c": (c[0], c[1])}})
+    mb = MB()
+    mb.loft([prof.ring(s) for s in prof.stations], prof.pole(0), prof.pole(1))
+    return mb
+
 
 
 # ===========================================================================
@@ -546,7 +689,8 @@ def emit(pieces, collection, colors, props=None):
         if not mb.f:
             continue
         mat = bpy.data.materials.get(colors[role])
-        sides = [(part, 1)] + ([(part.replace("Left", "Right", 1), -1)] if part.startswith("Left") else [])
+        mirror = part.startswith("Left") and item not in NO_MIRROR
+        sides = [(part, 1)] + ([(part.replace("Left", "Right", 1), -1)] if mirror else [])
         for pname, side in sides:
             made.append(make_object(f"{item}_{pname}", mb, pname, mat, collection, side, props))
     return made
@@ -606,7 +750,7 @@ def make_material(name, hex_color, roughness):
 
 
 def step3_materials(npc):
-    for name, (hex_color, rough) in npc["materials"].items():
+    for name, (hex_color, rough) in {**CONFIG["variant_materials"], **npc["materials"]}.items():
         make_material(name, hex_color, rough)
     skin = bpy.data.materials[npc["skin"]]
     for ob in get_collection("Base_R15").objects:
@@ -619,6 +763,7 @@ def step3_materials(npc):
 # ===========================================================================
 CTX = {"torso_outer": 0.03}
 X = Vector((1, 0, 0))
+Y = Vector((0, 1, 0))
 
 
 def lip(prof, s, off, depth):
@@ -816,9 +961,95 @@ def _shoes_sneaker(p):
             ("ShoeAccent", "LeftFoot", acc, "accent")]
 
 
+def fz(prof, z, x, off, s=None):
+    """Point on the front at horizontal position x with the cross-section of station s (default: z,
+    clamped to the full, un-bevelled part) placed at height z – flat panels that ignore the bevels."""
+    lo, hi = prof.full
+    pt = prof.front(min(hi, max(lo, z)) if s is None else s, x, off)
+    pt.z = z
+    return pt
+
+
+def _top_shirt(p):
+    """Short-sleeved work shirt (tee / polo), worn over the jeans like the hoodie. The polo adds
+    collar wings below the chin and a button placket with buttons (accent)."""
+    o, item = p["offset"], p["item"]
+    UT, LT, UA = P["UpperTorso"], P["LowerTorso"], P["LeftUpperArm"]
+    top = UT.zt
+    pieces = []
+
+    # --- UpperTorso: closed around the neck like the hoodie
+    mb, acc = MB(), MB()
+    neck = [circle((0, 0, top + 0.02), 0.50, UT.n, phase=UT.phase), circle((0, 0, top - 0.01), 0.40, UT.n, phase=UT.phase)]
+    mb.loft([UT.ring(s, o) for s in UT.stations] + neck, UT.pole(0, o), Vector((0, 0, top - 0.05)))
+    if p["collar"]:
+        rows = p["wing"]
+        for sgn in (1, -1):
+            mb.slab([[UT.front(z, sgn * x, o + 0.022) for x in (x0, x1)] for z, x0, x1 in rows],
+                    [[UT.front(z, sgn * x, o + 0.004) for x in (x0, x1)] for z, x0, x1 in rows])
+        z0, z1, w = p["placket"]
+        zs = [z0, (z0 + z1) / 2, z1]
+        mb.slab([[UT.front(z, x, o + 0.01) for x in (-w, w)] for z in zs],
+                [[UT.front(z, x, o - 0.006) for x in (-w, w)] for z in zs])
+        for z in p["buttons"]:
+            c = UT.front(z, 0.0, o + 0.006)
+            acc.sweep([c, c + Vector((0, -0.016, 0))], [0.022, 0.022], 8, ref=X)
+    pieces += [(item, "UpperTorso", mb, "main"), (item + "Accent", "UpperTorso", acc, "accent")]
+
+    # --- LowerTorso: down to a plain hem over the jeans
+    mb = MB()
+    hem = p["hem_z"]
+    lo, cap0 = lip(LT, hem, -0.01, 0.06)
+    mb.loft(lo + [LT.ring(hem, o + 0.006), LT.ring(hem + 0.04, o)]
+            + [LT.ring(s, o) for s in LT.stations if hem + 0.05 < s <= LT.full[1]] + [LT.ring(LT.zt + 0.03, o - 0.012)],
+            cap0, LT.center(LT.zt + 0.03))
+    pieces.append((item, "LowerTorso", mb, "main"))
+
+    # --- short sleeve with a slightly thicker hem
+    mb = MB()
+    e = p["sleeve_z"]
+    lo, cap0 = lip(UA, e, -0.01, 0.06)
+    mb.loft(lo + [UA.ring(e, o + 0.008), UA.ring(e + 0.05, o + 0.008)] + [UA.ring(s, o) for s in UA.stations if s > e + 0.07],
+            cap0, UA.pole(1, o))
+    pieces.append((item, "LeftUpperArm", mb, "main"))
+    return pieces
+
+
+def _outer_vest(p):
+    """Hi-vis vest over a shirt: no sleeves, `offset` at front and back but only side_off at the
+    sides (the arms hang there), reflective stripes (accent) around the torso."""
+    UT, LT = P["UpperTorso"], P["LowerTorso"]
+    top, side = UT.zt, p["side_off"]
+    extra = p["offset"] - side
+    mod = lambda s, th: extra * abs(math.sin(th))
+
+    # --- UpperTorso: from the waist over the shoulders; the neck opening is hidden by the head
+    mb, acc = MB(), MB()
+    rows = [UT.ring(s, side, mod) for s in UT.stations if UT.zb <= s < UT.zt]
+    neck = [circle((0, 0, top + 0.05), 0.56, UT.n, phase=UT.phase), circle((0, 0, top), 0.46, UT.n, phase=UT.phase)]
+    mb.loft([UT.ring(UT.zb, side - 0.03)] + rows + [UT.ring(UT.zt, side, mod, z=top + 0.035)] + neck,
+            UT.center(UT.zb + 0.05), Vector((0, 0, top - 0.05)))
+    for z0, z1 in p["stripes"]:
+        acc.band([UT.ring(z0, side - 0.004, mod), UT.ring(z0, side + 0.012, mod),
+                  UT.ring(z1, side + 0.012, mod), UT.ring(z1, side - 0.004, mod)])
+    pieces = [("Vest", "UpperTorso", mb, "main"), ("VestStripe", "UpperTorso", acc, "accent")]
+
+    # --- LowerTorso: down to the hem (tucks under the UpperTorso piece at the top)
+    mb = MB()
+    hem = p["hem_z"]
+    mb.loft([LT.ring(hem, -0.01), LT.ring(hem, side + 0.004, mod)]
+            + [LT.ring(s, side, mod) for s in LT.stations if hem + 0.03 < s <= LT.full[1]]
+            + [LT.ring(LT.zt + 0.04, side - 0.01, mod)], LT.center(hem + 0.03), LT.center(LT.zt + 0.04))
+    pieces.append(("Vest", "LowerTorso", mb, "main"))
+    return pieces
+
+
 STYLES = {
     ("top", "hoodie"): _top_hoodie,
+    ("top", "tee"): _top_shirt,
+    ("top", "polo"): _top_shirt,
     ("outer", "jacket_open"): _outer_jacket_open,
+    ("outer", "vest"): _outer_vest,
     ("bottom", "jeans"): _bottom_jeans,
     ("shoes", "sneaker"): _shoes_sneaker,
 }
@@ -996,8 +1227,123 @@ def _hair_tail(p):
     return [("Tail", "Head", mb, "main")]
 
 
-HAIR_STYLES = {"short_crop": _hair_short_crop, "buzz": _hair_buzz, "tail": _hair_tail}
-ACCESSORY_STYLES = {}  # e.g. "beanie", "chain", "backpack_strap" – none for NPC #1
+def _hair_mustache(p):
+    half, r = p["path"], p["radii"]
+    mb = MB()
+    face_tube(mb, [(-x, z) for x, z in reversed(half[1:])] + list(half), list(reversed(r[1:])) + list(r), p["flat"])
+    return [("Mustache", "Head", mb, "main")]
+
+
+def _hair_beard(p):
+    """Shell over the head mesh: from the upper edge (per column) down the straight part of the head
+    and under the chin; thin at the edge so it blends into the skin."""
+    H = P["Head"]
+    z_base = H.stations[3]  # lower end of the straight part
+    outer, inner = [], []
+    for a in p["cols"]:
+        th, ze = D(-90 + a), interp(p["edge"], abs(a))
+        zs = [ze + (z_base - ze) * f for f in p["rows"]] + p["chin"]
+        outer.append([H.point(z, th, off) for z, off in zip(zs, p["off"])])
+        inner.append([H.point(z, th, p["inner"]) for z in zs])
+    mb = MB()
+    mb.slab([list(r) for r in zip(*outer)], [list(r) for r in zip(*inner)])  # rows x cols
+    return [("Beard", "Head", mb, "main")]
+
+
+HAIR_STYLES = {"short_crop": _hair_short_crop, "buzz": _hair_buzz, "tail": _hair_tail,
+               "mustache": _hair_mustache, "beard": _hair_beard}
+
+
+def _acc_apron(p):
+    o, t = p["offset"], p["thickness"]
+    UT, LT = P["UpperTorso"], P["LowerTorso"]
+    top = UT.zt
+    pieces = []
+
+    # --- bib with a chest pocket, straps over the shoulders and down the back to the waist tie
+    mb = MB()
+    w0, w1 = p["bib_w"]
+    rows = [2.32, 2.9, 3.4, p["bib_top"]]
+    xs = lambda z: [(w0 + (w1 - w0) * (z - rows[0]) / (rows[-1] - rows[0])) * (-1 + 2 * j / 6) for j in range(7)]
+    mb.slab([[fz(UT, z, x, o + t / 2) for x in xs(z)] for z in rows], [[fz(UT, z, x, o - t / 2) for x in xs(z)] for z in rows])
+    z0, z1, w = p["pocket"]
+    mb.slab([[fz(UT, z, x, o + t / 2 + 0.014) for x in (-w, 0, w)] for z in (z0, z1)],
+            [[fz(UT, z, x, o) for x in (-w, 0, w)] for z in (z0, z1)])
+    sx, r = p["strap_x"], p["strap_r"]
+    for sgn in (1, -1):
+        fr = lambda z, x: fz(UT, z, sgn * x, o + 0.005)
+        bk = lambda z, x: (lambda v: Vector((v.x, -v.y, v.z)))(fr(z, x))
+        path = [fr(p["bib_top"] - 0.04, w1 - 0.04), fr(3.95, sx - 0.06),
+                Vector((sgn * sx, -0.50, top + 0.02)), Vector((sgn * sx, -0.15, top + 0.03)),
+                Vector((sgn * sx, 0.15, top + 0.03)), Vector((sgn * sx, 0.50, top + 0.02)),
+                bk(3.95, sx - 0.06), bk(3.2, sx - 0.12), bk(2.36, sx - 0.2)]
+        mb.sweep(path, [r] * len(path), 6, sx=0.35, ref=X)
+    pieces.append(("Apron", "UpperTorso", mb, "main"))
+
+    # --- LowerTorso: waist tie all around with a bow at the back, top of the skirt at the front
+    mb = MB()
+    tz0, tz1 = p["tie_z"]
+    mb.band([LT.ring(tz0, o - 0.012), LT.ring(tz0, o + 0.008), LT.ring(tz1, o + 0.008), LT.ring(tz1, o - 0.012)])
+    W = p["skirt_w"]
+    xs = [W * (-1 + 2 * j / 8) for j in range(9)]
+    zs = [1.97, 2.12, 2.30]
+    mb.slab([[fz(LT, z, x, o + t / 2, s=2.2) for x in xs] for z in zs], [[fz(LT, z, x, o - t / 2, s=2.2) for x in xs] for z in zs])
+    yb = LT.point(2.3, D(90), o + 0.008).y + 0.012
+    for sgn in (1, -1):
+        loop = [Vector((sgn * x, yb, z)) for x, z in ((0.02, 2.30), (0.10, 2.37), (0.19, 2.34), (0.20, 2.27), (0.10, 2.25), (0.03, 2.29))]
+        mb.sweep(loop, [0.022] * len(loop), 6, sy=0.45, ref=Y)
+        tail = [Vector((sgn * x, yb, z)) for x, z in ((0.03, 2.28), (0.07, 2.12), (0.10, 1.98))]
+        mb.sweep(tail, [0.03, 0.03, 0.026], 6, sy=0.35, ref=Y)
+    mb.sweep([Vector((-0.04, yb, 2.30)), Vector((0.04, yb, 2.30))], [0.035, 0.035], 6, sy=0.6, ref=Y)
+    pieces.append(("Apron", "LowerTorso", mb, "main"))
+
+    # --- skirt below the hips: one panel per leg, same curve as the LowerTorso part
+    mb = MB()
+    xs = [0.004] + [W * j / 4 for j in range(1, 5)]
+    zs = [2.03, 1.65, p["skirt_z"]]
+    mb.slab([[fz(LT, z, x, o + t / 2, s=2.2) for x in xs] for z in zs], [[fz(LT, z, x, o - t / 2, s=2.2) for x in xs] for z in zs])
+    pieces.append(("Apron", "LeftUpperLeg", mb, "main"))
+    return pieces
+
+
+def _acc_gloves(p):
+    o = p["offset"]
+    H, LA = P["LeftHand"], P["LeftLowerArm"]
+    zt = H.zt
+    mb = MB()
+    mb.loft([H.ring(s, o) for s in H.stations if s < zt]
+            + [H.ring(H.full[1], o + 0.012, z=zt + 0.02), H.ring(H.full[1], o + 0.012, z=zt + 0.07), H.ring(H.full[1], -0.01, z=zt + 0.07)],
+            H.pole(0, o), H.center(zt + 0.03))
+    cuff = MB()
+    f, z0, z1 = LA.full[0], LA.zb - 0.02, p["cuff_z"]
+    cuff.loft([LA.ring(f, o + 0.004, z=z0), LA.ring(f, o + 0.006, z=z1 - 0.07), LA.ring(f, o + 0.026, z=z1), LA.ring(f, -0.01, z=z1)],
+              LA.center(z0) - Z * 0.02, LA.center(z1 - 0.04))
+    return [("Glove", "LeftHand", mb, "main"), ("GloveCuff", "LeftLowerArm", cuff, "main")]
+
+
+def _acc_clipboard(p):
+    return [("Clipboard", "LeftHand", rbox(*p["board"]), "main"),
+            ("ClipboardPaper", "LeftHand", rbox(*p["paper"], bevel=0.003), "paper"),
+            ("ClipboardClip", "LeftHand", rbox(*p["clip"]), "clip")]
+
+
+ACCESSORY_STYLES = {"apron": _acc_apron, "gloves": _acc_gloves, "clipboard": _acc_clipboard}
+
+
+def build_piece(kind, style, colors, collection, props):
+    """One configured piece of any kind (garment type, "hair", "face", "accessory"). Objects that
+    already exist (the NPC wears the piece) are not built again."""
+    if kind == "hair":
+        build = HAIR_STYLES[style]
+    elif kind == "face":
+        build = FACE_STYLES[style]
+    elif kind == "accessory":
+        build = ACCESSORY_STYLES[style]
+    else:
+        build = STYLES[(kind, style)]
+    p = {k: (dict(x) if isinstance(x, dict) else x) for k, x in CONFIG["styles"][kind][style].items()}
+    pieces = [pc for pc in build(p) if f"{pc[0]}_{pc[1]}" not in bpy.data.objects]
+    return emit(pieces, collection, colors, props)
 
 
 def step5_head_hair(npc):
@@ -1012,11 +1358,12 @@ def step5_head_hair(npc):
         p = dict(CONFIG["styles"]["hair"][hair["style"]])
         p.update(hair.get("params", {}))
         emit(HAIR_STYLES[hair["style"]](p), get_collection("Hair"), hair["colors"], {"layer": "hair", "style": hair["style"]})
+    for x in npc.get("extras", []):  # further visible pieces of any kind (check renders of the variants)
+        coll = get_collection(TYPE_COLLECTION.get(x["kind"], "Accessories"))
+        build_piece(x["kind"], x["style"], x["colors"], coll, {"layer": x["kind"], "style": x["style"]})
     variants = get_collection("Variants")
     for v in CONFIG["variants"]:
-        p = {k: (dict(x) if isinstance(x, dict) else x) for k, x in CONFIG["styles"][v["kind"]][v["style"]].items()}
-        build = (HAIR_STYLES if v["kind"] == "hair" else FACE_STYLES)[v["style"]]
-        for ob in emit(build(p), variants, v["colors"], {"layer": "variant", "style": v["style"]}):
+        for ob in build_piece(v["kind"], v["style"], v["colors"], variants, {"layer": "variant", "style": v["style"]}):
             ob.hide_render = True
     for acc in npc.get("accessories", []):
         if acc.get("enabled", True):
@@ -1190,10 +1537,15 @@ FBX_SETTINGS = {
 }
 
 
-def export_fbx(filepath, run=False):
-    """Select every mesh object and (only with run=True) write the FBX with FBX_SETTINGS."""
+def item_of(ob):
+    return ob.name[:-len(ob["r15_part"]) - 1]
+
+
+def export_fbx(filepath, run=False, items=None):
+    """Select every mesh object (only those of `items` if given) and (only with run=True) write the
+    FBX with FBX_SETTINGS."""
     for ob in bpy.data.objects:
-        ob.select_set(ob.type == "MESH")
+        ob.select_set(ob.type == "MESH" and (items is None or item_of(ob) in items))
     if run:
         bpy.ops.export_scene.fbx(filepath=filepath, **FBX_SETTINGS)
     return filepath
@@ -1277,8 +1629,9 @@ def export_studio(npc_key):
         for t in tris:
             blob += struct.pack("<HHH", *t)
         mat = ob.data.materials[0]
-        parts.append({"name": ob.name, "item": ob.name[:-len(ob["r15_part"]) - 1], "part": ob["r15_part"],
+        parts.append({"name": ob.name, "item": item_of(ob), "part": ob["r15_part"],
                       "color": mat.get("hex", "#FFFFFF"),
+                      "size": [round(abs(x), 4) for x in rbx(hi - lo)],
                       "roughness": round(mat.roughness, 2),
                       "offset": [round(x, 4) for x in rbx(c - part_center(ob["r15_part"]))]})
     raw = os.path.join(folder, f"{npc_key}.bin")
@@ -1317,6 +1670,7 @@ def main():
     ap.add_argument("--tag", default=None)
     ap.add_argument("--studio", action="store_true")
     ap.add_argument("--fbx", action="store_true")
+    ap.add_argument("--fbx-items", default=None, help="comma-separated items: only export these to the FBX")
     args = ap.parse_args(argv)
     npc = CONFIG["npcs"][args.npc]
     os.makedirs(OUT, exist_ok=True)
@@ -1348,7 +1702,8 @@ def main():
     if args.studio:
         print("STUDIO", export_studio(args.npc))
     if args.fbx:
-        print("FBX", export_fbx(os.path.join(OUT, f"{args.npc}.fbx"), run=True))
+        items = set(args.fbx_items.split(",")) if args.fbx_items else None
+        print("FBX", export_fbx(os.path.join(OUT, f"{args.npc}.fbx"), run=True, items=items))
     bpy.context.preferences.filepaths.save_version = 0  # no .blend1 backups
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, f"{args.npc}.blend"))
     if args.render:

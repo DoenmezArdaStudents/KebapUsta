@@ -8,7 +8,9 @@
 	    Server/CustomerAppearance needs) and is shrunk by the import scale (the importer reads the
 	    FBX centimetres as studs → 100× too large; MeshPart.Size scales the mesh losslessly)
 	  * physics off, SmoothPlastic, npc01 colours as defaults
-	  * the folder replaces ServerStorage.CustomerParts, the import model is removed
+	  * the parts are merged into ServerStorage.CustomerParts (same name = replaced), so an FBX with
+	    only the new items (`--fbx-items`) is enough; the import model is removed
+	  * afterwards every part of the manifest must be in the folder
 	Then export ServerStorage.CustomerParts to assets/ServerStorage/CustomerParts.rbxm (CLAUDE.md).
 ]]
 
@@ -22,26 +24,35 @@ for _, info in manifest.parts do
 	byName[info.name] = info
 end
 
--- import scale from the head (1.18 studs high in the builder)
-local head = imp:FindFirstChild("Body_Head", true) :: MeshPart
-assert(head, "Body_Head missing in the import")
-local scale = head.Size.Y / 1.2216796875
+local imported, problems = {}, {}
+for _, p in imp:GetDescendants() do
+	if p:IsA("MeshPart") then
+		if byName[p.Name] then
+			table.insert(imported, p)
+		else
+			table.insert(problems, "not in manifest: " .. p.Name)
+		end
+	end
+end
+assert(#imported > 0, "no MeshParts of the manifest in the import")
+
+-- import scale from the largest imported part (manifest `size` = size in studs)
+table.sort(imported, function(a, b)
+	return a.Size.Magnitude > b.Size.Magnitude
+end)
+local ref = byName[imported[1].Name].size
+local scale = imported[1].Size.Magnitude / Vector3.new(ref[1], ref[2], ref[3]).Magnitude
 assert(math.round(scale) >= 1 and math.abs(scale / math.round(scale) - 1) < 0.01, "unexpected import scale " .. scale)
 scale = math.round(scale)
 
-local folder = Instance.new("Folder")
-folder.Name = "CustomerParts"
-local seen, problems = {}, {}
-for _, p in imp:GetDescendants() do
-	if not p:IsA("MeshPart") then
-		continue
-	end
+local folder = ServerStorage:FindFirstChild("CustomerParts")
+if not folder then
+	folder = Instance.new("Folder")
+	folder.Name = "CustomerParts"
+	folder.Parent = ServerStorage
+end
+for _, p in imported do
 	local info = byName[p.Name]
-	if not info then
-		table.insert(problems, "not in manifest: " .. p.Name)
-		continue
-	end
-	seen[p.Name] = true
 	p.Size /= scale
 	p.Anchored = false
 	p.CanCollide = false
@@ -57,19 +68,18 @@ for _, p in imp:GetDescendants() do
 	p:SetAttribute("Item", info.item)
 	p:SetAttribute("Part", info.part)
 	p:SetAttribute("Offset", Vector3.new(info.offset[1], info.offset[2], info.offset[3]))
+	local old = folder:FindFirstChild(p.Name)
+	if old then
+		old:Destroy()
+	end
 	p.Parent = folder
 end
 for name in byName do
-	if not seen[name] then
-		table.insert(problems, "missing in import: " .. name)
+	if not folder:FindFirstChild(name) then
+		table.insert(problems, "missing in CustomerParts: " .. name)
 	end
 end
 assert(#problems == 0, table.concat(problems, "\n"))
 
-local old = ServerStorage:FindFirstChild("CustomerParts")
-if old then
-	old:Destroy()
-end
-folder.Parent = ServerStorage
 imp:Destroy()
-return string.format("CustomerParts: %d MeshParts (import scale %d)", #folder:GetChildren(), scale)
+return string.format("CustomerParts: %d new/replaced, %d MeshParts (import scale %d)", #imported, #folder:GetChildren(), scale)

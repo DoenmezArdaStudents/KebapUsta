@@ -2,9 +2,9 @@
 -- the behaviour state machine, patience, dialogue, eating and leaving. Also street pedestrians.
 --
 -- Appearance: customers and pedestrians wear a Shared/CustomerLooks look (rolled from lookSeed,
--- put on by Server/CustomerAppearance: Blender meshes + free Roblox catalog items). If those
--- assets are missing, and for staff / drivers (CustomerService.Dress with the old look table),
--- the old part-based look below is used.
+-- put on by Server/CustomerAppearance: Blender meshes + free Roblox catalog items); staff and
+-- drivers wear CustomerLooks.Staff (CustomerService.DressStaff). If those assets are missing, the
+-- old part-based look below is used (CustomerService.Dress with the old look table).
 --
 -- States: Entering -> Queuing -> Ordering -> WaitingForFood -> ReceivingFood -> Eating -> Leaving
 --         any waiting state -> Cancelled -> Leaving
@@ -21,6 +21,7 @@ local Config = require(Shared.Config)
 local OrderLogic = require(Shared.OrderLogic)
 local DialogueConfig = require(Shared.DialogueConfig)
 local CustomerLooks = require(Shared.CustomerLooks)
+local Business = require(Shared.Business)
 local Net = require(script.Parent.Net)
 local CustomerAppearance = require(script.Parent.CustomerAppearance)
 local RestaurantService = require(script.Parent.RestaurantService)
@@ -1775,9 +1776,23 @@ function CustomerService.Debug()
 	return table.concat(out, "\n")
 end
 
--- used by the employee AI (Server/EmployeeService)
+-- staff / delivery drivers: the work clothes of `role` (Shared/CustomerLooks.STAFF), rolled from
+-- `seed` mixed with the role (two hires with the same contract seed still look different); `name`
+-- picks the sex if it is a known name. false if the assets are missing (callers then
+-- use CustomerService.Dress with an old look table).
+local function dressStaff(rig: Model, role: string, seed: number, name: string?): boolean
+	if not CustomerAppearance.Available() then
+		return false
+	end
+	local look = CustomerLooks.Staff(Random.new(seed * 7 + Business.RoleSeed(role)), role, { sex = DialogueConfig.SexOfName(name) })
+	return CustomerAppearance.Dress(rig, look)
+end
+
+-- used by the employee AI (Server/EmployeeService) and the delivery van (Server/LogisticsService)
 CustomerService.NewRig = newRig
 CustomerService.Dress = dress
+CustomerService.DressStaff = dressStaff
+CustomerService.JointOffset = jointOffset
 CustomerService.AnimIds = animIds
 function CustomerService.OrderingCustomer()
 	local c = orderingCustomer

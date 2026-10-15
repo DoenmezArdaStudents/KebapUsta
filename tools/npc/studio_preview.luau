@@ -8,7 +8,8 @@
 	2. Catalog items: loads every asset of Shared/CustomerLooks into ServerStorage.CustomerAccessories
 	   (InsertService, free Roblox items) – the folder that is exported to assets/ for the game.
 	3. Lineup: rolls looks for SEEDS with Shared/CustomerLooks and dresses standard R15 rigs with
-	   Server/CustomerAppearance in workspace.CustomerLookPreview, in front of the restaurant.
+	   Server/CustomerAppearance in workspace.CustomerLookPreview, in front of the restaurant; a second
+	   row shows the work clothes of STAFF_ROLES (CustomerLooks.Staff).
 	   Old previews (NpcPreview, CustomerPreviewTest, …) are removed.
 
 	Edit mode only (MCP execute_luau or the command bar): EditableMesh geometry is not saved and is
@@ -16,6 +17,7 @@
 ]]
 
 local SEEDS = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }
+local STAFF_ROLES = { "cashier", "cutter", "preparer", "cleaner", "manager", "driver" }
 
 local AssetService = game:GetService("AssetService")
 local EncodingService = game:GetService("EncodingService")
@@ -127,16 +129,24 @@ local lineup = Instance.new("Folder")
 lineup.Name = "CustomerLookPreview"
 lineup.Parent = workspace
 local summary = {}
+local entries = {}
 for i, seed in SEEDS do
-	local look = CustomerLooks.Roll(Random.new(seed))
+	table.insert(entries, { x = i - (#SEEDS + 1) / 2, z = 0, seed = seed, look = CustomerLooks.Roll(Random.new(seed)) })
+end
+for i, role in STAFF_ROLES do
+	local look = CustomerLooks.Staff(Random.new(i * 7), role)
+	table.insert(entries, { x = i - (#STAFF_ROLES + 1) / 2, z = -6, seed = role, look = look })
+end
+for _, entry in entries do
+	local look, seed = entry.look, entry.seed
 	local rig = Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
 	local animate = rig:FindFirstChild("Animate")
 	if animate then
 		animate:Destroy()
 	end
-	rig.Name = string.format("Look_%d_%s", seed, look.sex)
+	rig.Name = string.format("Look_%s_%s", tostring(seed), look.sex)
 	rig.HumanoidRootPart.Anchored = true
-	rig:PivotTo(origin * CFrame.new((i - (#SEEDS + 1) / 2) * 4.5, 0, 0))
+	rig:PivotTo(origin * CFrame.new(entry.x * 4.5, 0, entry.z))
 	rig.Parent = lineup
 	CustomerAppearance.Dress(rig, look, parts, accessories)
 	-- stand on the floor
@@ -153,7 +163,7 @@ for i, seed in SEEDS do
 			table.insert(ids, piece.id)
 		end
 	end
-	table.insert(summary, string.format("%d %s: %s", seed, look.sex, table.concat(ids, ", ")))
+	table.insert(summary, string.format("%s %s: %s", tostring(seed), look.sex, table.concat(ids, ", ")))
 	task.wait()
 end
 if #loadErrors > 0 then

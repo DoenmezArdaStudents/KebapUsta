@@ -1,6 +1,6 @@
--- Customer looks (pure data + roll): which pieces a customer wears and in which colours.
--- Rolled from the customer's lookSeed, so a regular looks the same on every visit.
--- Server/CustomerAppearance puts a look onto an R15 rig.
+-- Customer, staff and driver looks (pure data + roll): which pieces an NPC wears and in which colours.
+-- Rolled from a seed (customers: lookSeed, staff: the contract seed), so a regular or an employee
+-- looks the same every time. Server/CustomerAppearance puts a look onto an R15 rig.
 --
 -- Every customer shares one body (tools/npc: classic R15 blocks + face). Variety comes from:
 --   mesh    – our Blender mesh set (ServerStorage.CustomerParts, objects <Item>_<R15 part>);
@@ -10,7 +10,10 @@
 --             palette and the untextured block look
 -- Colours: red, grey, brown and the shades in between (+ dark denim for jeans).
 -- Rules: one top, an optional outer layer, bottoms, shoes, hair; under a hat the customer gets a
--- buzz cut (women also a low ponytail) so no hair pokes through the hat.
+-- buzz cut (women also a low ponytail) so no hair pokes through the hat. Men may wear a moustache or
+-- a full beard (rolled last, so looks from before stayed the same).
+-- Staff and drivers (CustomerLooks.Staff) are the same kind of people – skin, hair, face and facial
+-- hair are rolled like a customer's – in the work clothes of their role (STAFF).
 
 local CustomerLooks = {}
 
@@ -53,6 +56,7 @@ local SLOT_COLORS = {
 -- Only list a segment if it stays covered in every pose (crop top, short sleeves, skirt: no).
 -- needsTop: an outer layer that only fits over these tops (our tight mesh jacket would let the
 -- thicker layered catalog tops poke through).
+-- uniform: work clothes, only worn via STAFF (never rolled for customers).
 CustomerLooks.ITEMS = {
 	-- base (always)
 	body = { slot = "base", source = "mesh", items = { Body = "skin" } },
@@ -115,6 +119,24 @@ CustomerLooks.ITEMS = {
 	-- face accessories (optional)
 	aviators = { slot = "face", source = "catalog", asset = 376526673, weight = 1 }, -- Stylish Aviators
 	shades = { slot = "face", source = "catalog", asset = 376527500, weight = 1 }, -- Orange Shades
+
+	-- facial hair (optional, men)
+	mustache = { slot = "facialHair", source = "mesh", sex = "m", weight = 2, items = { Mustache = "hair" } },
+	beard = { slot = "facialHair", source = "mesh", sex = "m", weight = 1, items = { Beard = "hair", Mustache = "hair" } },
+
+	-- work clothes (staff, drivers)
+	work_tee = { slot = "top", source = "mesh", uniform = true, items = { Tee = "main" }, covers = { "UpperTorso" } },
+	polo = { slot = "top", source = "mesh", uniform = true, items = { Polo = "main", PoloAccent = "accent" }, covers = { "UpperTorso" } },
+	vest = { slot = "outer", source = "mesh", uniform = true, items = { Vest = "main", VestStripe = "accent" } },
+	apron = { slot = "apron", source = "mesh", uniform = true, items = { Apron = "main" } },
+	gloves = { slot = "gloves", source = "mesh", uniform = true, items = { Glove = "main" }, covers = { "Hands" } },
+	rubber_gloves = { slot = "gloves", source = "mesh", uniform = true, items = { Glove = "main", GloveCuff = "main" }, covers = { "Hands" } },
+	clipboard = {
+		slot = "held",
+		source = "mesh",
+		uniform = true,
+		items = { Clipboard = "main", ClipboardPaper = "paper", ClipboardClip = "clip" },
+	},
 }
 
 CustomerLooks.CHANCE = {
@@ -122,6 +144,68 @@ CustomerLooks.CHANCE = {
 	outer = 0.5,
 	hat = 0.2,
 	face = 0.08,
+	facialHair = 0.3, -- of the men
+	staffFacialHair = 0.45, -- of the men on staff (the classic Usta)
+}
+
+-- Work clothes per role (Shared/Business.Roles + "driver"). Everyone in the shop wears the same
+-- uniform – black tee, dark jeans, black shoes, red apron and cap in the shop colour – and the role
+-- shows in the details. pieces: { item id, colours }; cap: colour of the cap (buzz cut under it),
+-- nil = normal hair. Unknown roles wear the cashier's clothes.
+local SHOP_RED, APRON_RED, BLACK, DARK = "#B5382F", "#9A2E2B", "#1E1E20", "#232325"
+local KITCHEN_SHOES = { main = "#151516", sole = "#2E2E30", accent = "#151516" }
+CustomerLooks.STAFF = {
+	cashier = {
+		pieces = { { "work_tee", { main = BLACK } }, { "apron", { main = APRON_RED } }, { "jeans", { main = DARK } }, { "sneakers", KITCHEN_SHOES } },
+		cap = SHOP_RED,
+	},
+	cutter = { -- black gloves at the spit
+		pieces = {
+			{ "work_tee", { main = BLACK } },
+			{ "apron", { main = APRON_RED } },
+			{ "gloves", { main = "#151516" } },
+			{ "jeans", { main = DARK } },
+			{ "sneakers", KITCHEN_SHOES },
+		},
+		cap = SHOP_RED,
+	},
+	preparer = { -- blue food-prep gloves
+		pieces = {
+			{ "work_tee", { main = BLACK } },
+			{ "apron", { main = APRON_RED } },
+			{ "gloves", { main = "#3F6EA8" } },
+			{ "jeans", { main = DARK } },
+			{ "sneakers", KITCHEN_SHOES },
+		},
+		cap = SHOP_RED,
+	},
+	cleaner = { -- blue apron, yellow rubber gloves, no cap
+		pieces = {
+			{ "work_tee", { main = BLACK } },
+			{ "apron", { main = "#2F4A6E" } },
+			{ "rubber_gloves", { main = "#D9A93A" } },
+			{ "jeans", { main = DARK } },
+			{ "sneakers", KITCHEN_SHOES },
+		},
+	},
+	manager = { -- dark polo with red buttons, no apron, clipboard
+		pieces = {
+			{ "polo", { main = "#2E2E30", accent = SHOP_RED } },
+			{ "jeans", { main = "#2F3B52" } },
+			{ "sneakers", KITCHEN_SHOES },
+			{ "clipboard", { main = "#7B5A3F", paper = "#EDE9E0", clip = "#B8BABD" } },
+		},
+	},
+	driver = { -- supplier: grey tee, hi-vis vest, rubber gloves for the boxes, work shoes
+		pieces = {
+			{ "work_tee", { main = "#6B6D70" } },
+			{ "vest", { main = "#D9622B", accent = "#C8CACC" } },
+			{ "rubber_gloves", { main = "#D9A93A" } },
+			{ "jeans", { main = "#2E2E30" } },
+			{ "sneakers", { main = "#5A3E2B", sole = "#2E2E30", accent = "#5A3E2B" } },
+		},
+		cap = "#2E2E30",
+	},
 }
 
 -- R15 parts behind the `covers` names
@@ -130,6 +214,7 @@ CustomerLooks.COVER_PARTS = {
 	LowerTorso = { "LowerTorso" },
 	UpperArms = { "LeftUpperArm", "RightUpperArm" },
 	LowerArms = { "LeftLowerArm", "RightLowerArm" },
+	Hands = { "LeftHand", "RightHand" },
 	UpperLegs = { "LeftUpperLeg", "RightUpperLeg" },
 	LowerLegs = { "LeftLowerLeg", "RightLowerLeg" },
 	Feet = { "LeftFoot", "RightFoot" },
@@ -183,7 +268,7 @@ end
 local function itemsFor(slot: string, sex: string, top: string?): { string }
 	local ids = {}
 	for id, def in CustomerLooks.ITEMS do
-		if def.slot == slot and (def.sex == nil or def.sex == sex) and (def.needsTop == nil or def.needsTop[top]) then
+		if def.slot == slot and not def.uniform and (def.sex == nil or def.sex == sex) and (def.needsTop == nil or def.needsTop[top]) then
 			table.insert(ids, id)
 		end
 	end
@@ -216,14 +301,11 @@ local function pickColor(rng: Random, groups: { string }, avoid: { [string]: boo
 	return hex
 end
 
--- Roll a complete look. Only `rng` is used, so the same seed always gives the same look.
--- opts.vip: VIPs and critics are recognisable – dark coat over a sweater and a fedora.
--- opts.sex: force "m" / "w" (e.g. to match a known name); the rest of the roll stays the same.
-function CustomerLooks.Roll(rng: Random, opts: { vip: boolean?, sex: string? }?)
-	local vip = opts ~= nil and opts.vip == true
+-- the person under the clothes: sex (forced or rolled – the roll is consumed either way), skin,
+-- hair colour and the colour roles of the face
+local function rollPerson(rng: Random, forceSex: string?)
 	local sexRoll = rng:NextNumber()
-	local sex = (opts and (opts.sex == "m" or opts.sex == "w") and opts.sex)
-		or (sexRoll < CustomerLooks.CHANCE.w and "w" or "m")
+	local sex = ((forceSex == "m" or forceSex == "w") and forceSex) or (sexRoll < CustomerLooks.CHANCE.w and "w" or "m")
 	local skin = CustomerLooks.SKIN[rng:NextInteger(1, #CustomerLooks.SKIN)]
 	local hairIndex = pickWeighted(rng, { 1, 2, 3, 4, 5, 6, 7, 8 }, function(i)
 		return CustomerLooks.HAIR_WEIGHTS[i]
@@ -236,6 +318,15 @@ function CustomerLooks.Roll(rng: Random, opts: { vip: boolean?, sex: string? }?)
 		shine = CustomerLooks.SHINE,
 		mouth = CustomerLooks.MOUTH[sex],
 	}
+	return sex, skin, hair, roles
+end
+
+-- Roll a complete look. Only `rng` is used, so the same seed always gives the same look.
+-- opts.vip: VIPs and critics are recognisable – dark coat over a sweater and a fedora.
+-- opts.sex: force "m" / "w" (e.g. to match a known name); the rest of the roll stays the same.
+function CustomerLooks.Roll(rng: Random, opts: { vip: boolean?, sex: string? }?)
+	local vip = opts ~= nil and opts.vip == true
+	local sex, skin, hair, roles = rollPerson(rng, opts and opts.sex)
 	local used: { [string]: boolean } = {}
 	local pieces = {}
 	local function add(id: string, colors)
@@ -280,8 +371,38 @@ function CustomerLooks.Roll(rng: Random, opts: { vip: boolean?, sex: string? }?)
 	if rng:NextNumber() < CustomerLooks.CHANCE.face then
 		add(pickItem(rng, "face", sex), { main = pickColor(rng, SLOT_COLORS.face) })
 	end
+	if rng:NextNumber() < CustomerLooks.CHANCE.facialHair and sex == "m" then
+		add(pickItem(rng, "facialHair", sex), { hair = hair })
+	end
 
 	return { version = CustomerLooks.VERSION, sex = sex, skin = skin, hair = hair, pieces = pieces }
+end
+
+-- Roll an employee or delivery driver: a person like a customer in the work clothes of `role`
+-- (STAFF). opts.sex: force "m" / "w" (the employee's name).
+function CustomerLooks.Staff(rng: Random, role: string, opts: { sex: string? }?)
+	local uniform = CustomerLooks.STAFF[role] or CustomerLooks.STAFF.cashier
+	local sex, skin, hair, roles = rollPerson(rng, opts and opts.sex)
+	local pieces = {
+		{ id = "body", colors = { skin = skin } },
+		{ id = sex == "w" and "face_w" or "face_m", colors = roles },
+	}
+	for _, entry in uniform.pieces do
+		table.insert(pieces, { id = entry[1], colors = entry[2] })
+	end
+	if uniform.cap then
+		table.insert(pieces, { id = "buzz", colors = { hair = hair } })
+		if sex == "w" then
+			table.insert(pieces, { id = "tail", colors = { hair = hair } })
+		end
+		table.insert(pieces, { id = "cap", colors = { main = uniform.cap } })
+	else
+		table.insert(pieces, { id = pickItem(rng, "hair", sex), colors = { hair = hair, main = hair } })
+	end
+	if sex == "m" and rng:NextNumber() < CustomerLooks.CHANCE.staffFacialHair then
+		table.insert(pieces, { id = pickItem(rng, "facialHair", sex), colors = { hair = hair } })
+	end
+	return { version = CustomerLooks.VERSION, sex = sex, skin = skin, hair = hair, pieces = pieces, role = role }
 end
 
 return CustomerLooks

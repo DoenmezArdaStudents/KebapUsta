@@ -506,7 +506,11 @@ local function newRig(): Model?
 	if not ok or not rig then
 		return nil
 	end
-	pcall(CustomerService.Dress, rig, { shirt = Color3.fromRGB(240, 200, 40), pants = Color3.fromRGB(50, 50, 60), skin = Color3.fromRGB(214, 170, 130), shoes = Color3.fromRGB(30, 30, 30), hat = true, hatColor = Color3.fromRGB(230, 70, 40) })
+	-- supplier's work clothes (Shared/CustomerLooks.STAFF.driver), a different person every delivery
+	local ok2, dressed = pcall(CustomerService.DressStaff, rig, "driver", math.random(1, 2 ^ 30))
+	if not (ok2 and dressed) then
+		pcall(CustomerService.Dress, rig, { shirt = Color3.fromRGB(240, 200, 40), pants = Color3.fromRGB(50, 50, 60), skin = Color3.fromRGB(214, 170, 130), shoes = Color3.fromRGB(30, 30, 30), hat = true, hatColor = Color3.fromRGB(230, 70, 40) })
+	end
 	rig.Name = "DeliveryDriver"
 	return rig
 end

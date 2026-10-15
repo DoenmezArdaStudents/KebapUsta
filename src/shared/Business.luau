@@ -1,6 +1,8 @@
 -- Business catalog shared by server and client: restaurant expansion stages, employee roles,
 -- price levels and the candidate generator. Pure data + helpers, no side effects.
 
+local DialogueConfig = require(script.Parent.DialogueConfig)
+
 local Business = {}
 
 export type Stage = {
@@ -167,14 +169,22 @@ function Business.BranchIncome(base: number, level: number, reputation: number):
 	return math.floor(base * (1 + 0.4 * (level - 1)) * (0.5 + reputation / 5) * 100 + 0.5) / 100
 end
 
-local FIRST = { "Ali", "Mehmet", "Ayşe", "Elif", "Can", "Lena", "Jonas", "Murat", "Selin", "Tim", "Emre", "Sophie", "Deniz", "Yusuf", "Mia", "Kerem" }
-
 export type Candidate = { role: string, name: string, skill: number, speed: number, rel: number, salary: number, seed: number }
 
--- a stable set of applicants per role and day (same list on server and client)
+-- number from the whole role name (the first letter + length alone made cashier and cleaner equal)
+function Business.RoleSeed(role: string): number
+	local h = 0
+	for i = 1, #role do
+		h = (h * 31 + string.byte(role, i)) % 100003
+	end
+	return h
+end
+
+-- a stable set of applicants per role and day (same list on server and client). Names come from
+-- Shared/DialogueConfig.FirstNames, so the employee's look (Shared/CustomerLooks.Staff) can match it.
 function Business.Candidates(role: string, day: number): { Candidate }
 	local def = Business.Roles[role]
-	local seed = day * 977 + #role * 131 + string.byte(role, 1) * 7
+	local seed = day * 977 + Business.RoleSeed(role) * 131
 	local rng = Random.new(seed)
 	local list = {}
 	for i = 1, 3 do
@@ -182,7 +192,8 @@ function Business.Candidates(role: string, day: number): { Candidate }
 		local speed = math.floor(rng:NextNumber(0.85, 1.2) * 100 + 0.5) / 100
 		local rel = math.floor(rng:NextNumber(0.75, 0.98) * 100 + 0.5) / 100
 		local salary = math.floor(def.salary * (0.75 + skill * 0.15 + (speed - 1) * 0.8 + (rel - 0.85) * 0.8) + 0.5)
-		table.insert(list, { role = role, name = FIRST[rng:NextInteger(1, #FIRST)], skill = skill, speed = speed, rel = rel, salary = salary, seed = seed + i })
+		local name = DialogueConfig.RandomName(rng, rng:NextNumber() < 0.5 and "w" or "m")
+		table.insert(list, { role = role, name = name, skill = skill, speed = speed, rel = rel, salary = salary, seed = seed + i })
 	end
 	return list
 end
