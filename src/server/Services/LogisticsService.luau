@@ -536,6 +536,7 @@ local function runVan()
 		end
 	end
 	dirty()
+	render() -- the delivery tracker shows "van is unloading" instead of the paid orders
 	if #load == 0 then
 		vanBusy = false
 		return
