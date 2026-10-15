@@ -2413,7 +2413,14 @@ function Laptop.IsOpen(): boolean
 	return OS.open
 end
 
+-- the laptop stands in the office (Server/OfficeService): it only opens at the desk
+Laptop.OnBlocked = function() end
+
 function Laptop.Open(app: string?)
+	if not OS.open and not nearLaptop() then
+		Laptop.OnBlocked()
+		return
+	end
 	if OS.open then
 		if app then
 			if OS.locked then
@@ -2610,6 +2617,15 @@ end
 function Laptop.Init()
 	build()
 	applyBrightness()
+	-- walking away from the office desk closes the laptop
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			if OS.open and not OS.animating and laptopPart() and not nearLaptop() then
+				Laptop.Close()
+			end
+		end
+	end)
 	-- in-world screen
 	task.spawn(function()
 		local part

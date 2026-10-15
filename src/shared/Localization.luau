@@ -111,7 +111,7 @@ local S = {
 	n_unlock_ready = { de = "✨ {name} freigeschaltet!", en = "✨ {name} unlocked!" },
 	n_knife_ready = { de = "🔪 Neues Messer: {name} – ab sofort im Einsatz.", en = "🔪 New knife: {name} – in use right away." },
 	n_installed = { de = "🔧 {name} eingebaut ({by}).", en = "🔧 {name} installed ({by})." },
-	n_installed_restock = { de = "🔧 {name} eingebaut! Jetzt am Laptop beim Lieferanten nachbestellen.", en = "🔧 {name} installed! Now order it from the supplier on the laptop." },
+	n_installed_restock = { de = "🔧 {name} eingebaut! Jetzt am Laptop im Büro beim Lieferanten nachbestellen.", en = "🔧 {name} installed! Now order it from the supplier on the office laptop." },
 	n_new_available = { de = "🔓 Neu verfügbar: {name} ({price}) – Laptop → Shop-Ausbau", en = "🔓 Now available: {name} ({price}) – Laptop → Shop Upgrades" },
 	n_upgrade_needs = { de = "Dafür brauchst du zuerst: {name}.", en = "You need this first: {name}." },
 	n_short_goal_done = { de = "🎯 Ziel geschafft! +{reward} · +{xp} XP", en = "🎯 Goal complete! +{reward} · +{xp} XP" },
@@ -162,7 +162,7 @@ local S = {
 	n_new_owner = { de = "{name} ist jetzt der Chef des Ladens.", en = "{name} is now the shop owner." },
 	n_day_start = { de = "Tag {day} beginnt – der Laden ist offen!", en = "Day {day} begins – the shop is open!" },
 	n_closing = { de = "Feierabend! Keine neuen Kunden mehr.", en = "Closing time! No new customers." },
-	n_closing_lock = { de = "🌙 22:00 – Feierabend! Sperr den Laden an der Tür ab (oder am Laptop), um den Tag zu beenden.", en = "🌙 22:00 – Closing time! Lock the shop at the door (or on the laptop) to end the day." },
+	n_closing_lock = { de = "🌙 22:00 – Feierabend! Sperr den Laden an der Tür ab (oder am Laptop im Büro), um den Tag zu beenden.", en = "🌙 22:00 – Closing time! Lock the shop at the door (or on the office laptop) to end the day." },
 	n_lock_reminder = { de = "🔑 Der Laden ist noch nicht abgesperrt.", en = "🔑 The shop is not locked yet." },
 	n_lock_too_early = { de = "Absperren geht erst nach 22:00 Uhr.", en = "You can only lock up after 22:00." },
 	n_locked = { de = "🔒 {name} hat den Laden abgesperrt. Gute Nacht!", en = "🔒 {name} locked the shop. Good night!" },
@@ -189,6 +189,7 @@ local S = {
 	n_waste_bins_empty = { de = "🗑️ Die Tonnen sind leer", en = "🗑️ The bins are empty" },
 	n_waste_truck_called = { de = "🚛 {name} hat die Müllabfuhr gerufen (€{price})", en = "🚛 {name} called the waste pickup (€{price})" },
 	n_waste_collected = { de = "🚛 Die Tonnen wurden geleert", en = "🚛 The bins have been emptied" },
+	n_need_office = { de = "💻 Der Laptop steht im Büro – geh in der Küche durch die Bürotür.", en = "💻 The laptop is in the office – go through the office door in the kitchen." },
 	n_rush = { de = "{period} Mehr Kunden kommen!", en = "{period} More customers incoming!" },
 	n_drink_taken = { de = "{item} aufs Tablett gestellt.", en = "{item} put on your tray." },
 	n_meal_to_tray = { de = "Gericht aufs Tablett gestellt.", en = "Meal put on your tray." },
@@ -250,13 +251,13 @@ local S = {
 	-- tutorial
 	tut_title = { de = "Tutorial", en = "Tutorial" },
 	tut_skip = { de = "Überspringen", en = "Skip" },
-	tut_1 = { de = "Willkommen in deinem Kebap-Laden! Ein Kunde kommt gleich zur Kassa. Geh hinter die Theke und nimm seine Bestellung auf – [F] beim Kunden oder am Laptop „Bestellung aufnehmen“.", en = "Welcome to your kebab shop! A customer is coming to the register. Go behind the counter and take their order – [F] at the customer or 'Take order' on the laptop." },
-	tut_2 = { de = "Die Bestellung ist jetzt im Laptop und unten in der Zutatenliste. Nimm ein Kebap-Brot aus der Brotstation hinten.", en = "The order is now on the laptop and in the ingredient list below. Take a kebab bread from the bread station at the back." },
+	tut_1 = { de = "Willkommen in deinem Kebap-Laden! Ein Kunde kommt gleich zur Kassa. Geh hinter die Theke und nimm seine Bestellung auf – [F] beim Kunden oder an der Kassa.", en = "Welcome to your kebab shop! A customer is coming to the register. Go behind the counter and take their order – [F] at the customer or at the register." },
+	tut_2 = { de = "Die Bestellung steht jetzt unten in der Zutatenliste. Nimm ein Kebap-Brot aus der Brotstation hinten.", en = "The order is now in the ingredient list below. Take a kebab bread from the bread station at the back." },
 	tut_3 = { de = "Geh zum Hühnerspieß und drück [E]. Schneide im Takt (Klick / Leertaste) – im grünen Bereich wird das Fleisch am besten. Das Ticket zeigt, wie viele Portionen nötig sind. [E] = fertig.", en = "Go to the chicken spit and press [E]. Cut in rhythm (click / space) – the green zone gives the best meat. The ticket shows how many portions are needed. [E] = done." },
 	tut_4 = { de = "Füge Gemüse aus der Kühltheke und Saucen aus den Spendern hinzu. Grüne Häkchen zeigen, was schon passt.", en = "Add vegetables from the cold counter and sauces from the dispensers. Green ticks show what's already right." },
 	tut_5 = { de = "Schließe das Brot am Brett und pack es ein. Dann wandert es auf dein Tablett.", en = "Close the bread at the board and pack it. It then goes on your tray." },
 	tut_6 = { de = "Der Kunde wartet vorne an der Theke beim Einpacken – serviere ihm das Gericht!", en = "The customer waits at the counter in front of the packing area – serve the meal!" },
-	tut_7 = { de = "Super! Du hast Geld verdient. Zutaten werden verbraucht – im Lagerraum oder in der Lieferanten-App am Laptop kannst du nachbestellen. Neue Zutaten & Geräte kaufst du am Laptop im Shop-Ausbau – die NÄCHSTEN ZIELE links zeigen dir den Weg. Um 22 Uhr Laden an der Tür absperren. Viel Erfolg!", en = "Great! You earned money. Ingredients get used up – restock in the storage room or with the supplier app on the laptop. Buy new ingredients & equipment in Shop Upgrades on the laptop – the NEXT GOALS on the left show the way. At 22:00 lock the shop at the door. Good luck!" },
+	tut_7 = { de = "Super! Du hast Geld verdient. Zutaten werden verbraucht – in der Lieferanten-App am Laptop im Büro (Tür in der Küche) kannst du nachbestellen. Neue Zutaten & Geräte kaufst du am Laptop im Shop-Ausbau – die NÄCHSTEN ZIELE links zeigen dir den Weg. Um 22 Uhr Laden an der Tür absperren. Viel Erfolg!", en = "Great! You earned money. Ingredients get used up – restock with the supplier app on the laptop in the office (door in the kitchen). Buy new ingredients & equipment in Shop Upgrades on the laptop – the NEXT GOALS on the left show the way. At 22:00 lock the shop at the door. Good luck!" },
 }
 
 Localization.Strings = S
