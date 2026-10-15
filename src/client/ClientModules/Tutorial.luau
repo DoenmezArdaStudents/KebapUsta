@@ -50,7 +50,7 @@ local function compute(): (number?, string?, Instance?)
 	end
 	if ps.tutorialDone then
 		if finishedShownAt and os.clock() - finishedShownAt < 9 then
-			return 7, "tut_7", station("stock_terminal")
+			return 7, "tut_7", station("laptop")
 		end
 		return nil
 	end
@@ -69,7 +69,7 @@ local function compute(): (number?, string?, Instance?)
 		if hadTicket then
 			return nil
 		end
-		return 1, "tut_1", customerInState("Ordering") or station("laptop")
+		return 1, "tut_1", customerInState("Ordering") or station("register")
 	end
 	hadTicket = true
 	if not meal then
