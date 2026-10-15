@@ -38,11 +38,17 @@ end
 local CRATE_STOCK = { classic = "bread_classic", duerum = "bread_duerum", box = "box" }
 local CRATE_PIECES = { classic = { "DisplayBreadBottom", "DisplayBreadTop" }, duerum = { "DisplayDuerumFlat" }, box = { "Box", "BoxSeam" } }
 local CRATE_FLOOR = 0.115 -- crate floor + cloth, above the bottom of the bin hitbox
-local BREAD_SCALE = 0.65 -- display breads are smaller so 2 x 4 fit per layer
-local BREAD_LAYER = 8
+local CRATE_WALL = 0.08 -- crate side / end wall thickness
+local BREAD_SCALE = 0.85 -- of the full-size bread mesh
+local BREAD_JITTER = 0.03 -- breads lie a little loose, never through a wall
+local BREAD_RINGS, BREAD_RAYS = 5, 16 -- footprint samples for the contact test
 
 type CratePiece = { part: BasePart, rot: CFrame, x: number, z: number, h: number }
-type Crate = { bin: BasePart, kind: string, pieces: { CratePiece }, folder: Folder, shown: number? }
+-- a resting bread: centre of its rim (where the two halves meet) and its turn around the vertical
+type Bread = { x: number, y: number, z: number, yaw: number }
+-- where breads are dropped, in bin space; `slack` = how far a bread may lie off its slot
+type BreadSlot = { x: number, z: number, yaw: number, slack: number }
+type Crate = { bin: BasePart, kind: string, pieces: { CratePiece }, folder: Folder, shown: number?, breads: { Bread }, slots: { BreadSlot } }
 
 -- templates relative to the bin: rotation, horizontal offset and height above the crate floor
 local function setupCrate(bin: BasePart): Crate | false
@@ -80,6 +86,14 @@ local function setupCrate(bin: BasePart): Crate | false
 		tpl.CanQuery = false -- a full heap must not block the bin's prompt (line of sight)
 		table.insert(pieces, { part = tpl, rot = rel - rel.Position, x = rel.X, z = rel.Z, h = rel.Y - floorY })
 	end
+	-- the stacks start on the crate floor: drop the templates' small gap above it
+	local lowest = math.huge
+	for _, p in ipairs(pieces) do
+		lowest = math.min(lowest, p.h - p.part.Size.Y / 2)
+	end
+	for _, p in ipairs(pieces) do
+		p.h -= lowest
+	end
 	for _, c in ipairs(unit:GetChildren()) do
 		if table.find(names, c.Name) or c.Name == "BoxBand" then
 			c:Destroy()
@@ -88,7 +102,99 @@ local function setupCrate(bin: BasePart): Crate | false
 	local folder = Instance.new("Folder")
 	folder.Name = "StockDisplay"
 	folder.Parent = unit
-	return { bin = bin, kind = kind, pieces = pieces, folder = folder }
+	return { bin = bin, kind = kind, pieces = pieces, folder = folder, breads = {}, slots = {} }
+end
+
+-- Kebab bread = two half ellipsoids (Blender: art/food/build_food.py) meeting at the rim: semi-axes
+-- along the bread, across it, and down / up from the rim.
+local function breadShape(c: Crate): (number, number, number, number)
+	local bottom, top = c.pieces[1].part.Size * BREAD_SCALE, c.pieces[2].part.Size * BREAD_SCALE
+	return bottom.X / 2, bottom.Z / 2, bottom.Y, top.Y
+end
+
+-- how far the ellipse footprint of a bread reaches out at (dx, dz) from its centre: 0 at the centre,
+-- 1 at the rim, > 1 outside
+local function footprint(b: Bread, a: number, w: number, dx: number, dz: number): number
+	local cos, sin = math.cos(b.yaw), math.sin(b.yaw)
+	local u, v = dx * cos - dz * sin, dx * sin + dz * cos
+	return (u / a) ^ 2 + (v / w) ^ 2
+end
+
+-- Where breads are dropped, repeating: a layer of breads side by side filling the crate floor, then a
+-- layer in the valleys between them. The breads are turned whichever way more of them fit per layer.
+local function breadSlots(c: Crate): { BreadSlot }
+	if #c.slots > 0 then
+		return c.slots
+	end
+	local a, w = breadShape(c)
+	local innerX, innerZ = c.bin.Size.X - CRATE_WALL * 2, c.bin.Size.Z - CRATE_WALL * 2
+	-- along: the bread's length runs along the crate (Z); otherwise across it (X)
+	local alongN = math.floor(innerX / (2 * w)) * math.floor(innerZ / (2 * a))
+	local acrossN = math.floor(innerX / (2 * a)) * math.floor(innerZ / (2 * w))
+	local along = alongN >= acrossN
+	local lenX, lenZ = if along then w else a, if along then a else w -- half extent on each axis
+	local nx, nz = math.max(math.floor(innerX / (2 * lenX)), 1), math.max(math.floor(innerZ / (2 * lenZ)), 1)
+	local cellX, cellZ = innerX / nx, innerZ / nz
+	local yaw = if along then math.pi / 2 else 0 -- the mesh's X axis is the bread's length
+	local slack = math.max(math.min(cellX / 2 - lenX, cellZ / 2 - lenZ, BREAD_JITTER), 0)
+	for ix = 1, nx do
+		for iz = 1, nz do
+			table.insert(c.slots, { x = -innerX / 2 + (ix - 0.5) * cellX, z = -innerZ / 2 + (iz - 0.5) * cellZ, yaw = yaw, slack = slack })
+		end
+	end
+	-- valleys between neighbours that lie side by side (along their width)
+	for ix = 1, if along then nx - 1 else nx do
+		for iz = 1, if along then nz else nz - 1 do
+			local x = -innerX / 2 + (ix - (if along then 0 else 0.5)) * cellX
+			local z = -innerZ / 2 + (iz - (if along then 0.5 else 0)) * cellZ
+			table.insert(c.slots, { x = x, z = z, yaw = yaw, slack = slack })
+		end
+	end
+	return c.slots
+end
+
+-- the i-th bread, dropped straight down onto the crate floor and breads 1 … i-1 (deterministic, so
+-- breads never jump when the stock changes; the last bread is always the one taken first)
+local function placeBread(c: Crate, i: number): Bread
+	if c.breads[i] then
+		return c.breads[i]
+	end
+	local a, w, down, up = breadShape(c)
+	local rng = Random.new(i)
+	local slots = breadSlots(c)
+	local slot = slots[(i - 1) % #slots + 1]
+	local b: Bread = {
+		x = slot.x + rng:NextNumber(-slot.slack, slot.slack),
+		y = 0,
+		z = slot.z + rng:NextNumber(-slot.slack, slot.slack),
+		yaw = slot.yaw + rng:NextNumber(-0.06, 0.06),
+	}
+	local floorY = -c.bin.Size.Y / 2 + CRATE_FLOOR
+	local rest = floorY + down
+	for ring = 0, BREAD_RINGS do
+		local r = ring / BREAD_RINGS * 0.98
+		for ray = 1, if ring == 0 then 1 else BREAD_RAYS do
+			local t = ray / BREAD_RAYS * math.pi * 2
+			-- a point on the bread's underside, in bin space (u along the bread, v across it)
+			local u, v = math.cos(t) * r * a, math.sin(t) * r * w
+			local cos, sin = math.cos(b.yaw), math.sin(b.yaw)
+			local dx, dz = u * cos + v * sin, -u * sin + v * cos
+			local depth = down * math.sqrt(1 - r * r)
+			-- highest surface right below that point: crate floor or the top of an earlier bread
+			local support = floorY
+			for k = 1, i - 1 do
+				local o = c.breads[k]
+				local f = footprint(o, a, w, b.x + dx - o.x, b.z + dz - o.z)
+				if f < 1 then
+					support = math.max(support, o.y + up * math.sqrt(1 - f))
+				end
+			end
+			rest = math.max(rest, support + depth)
+		end
+	end
+	b.y = rest
+	c.breads[i] = b
+	return b
 end
 
 -- the parts for the i-th unit in the crate (deterministic, so items never jump when stock changes)
@@ -96,20 +202,21 @@ local function crateItem(c: Crate, i: number): { BasePart }
 	local rng = Random.new(i)
 	local floorY = -c.bin.Size.Y / 2 + CRATE_FLOOR
 	local parts = {}
-	for _, p in ipairs(c.pieces) do
+	for k, p in ipairs(c.pieces) do
 		local part = p.part:Clone()
 		local cf
 		if c.kind == "classic" then
-			-- 2 columns x 4 rows per layer, slightly loose like real bread
-			local layer, k = (i - 1) // BREAD_LAYER, (i - 1) % BREAD_LAYER
-			local x = ((k % 2) - 0.5) * 0.76 + rng:NextNumber(-0.03, 0.03)
-			local z = ((k // 2) - 1.5) * 0.5 + rng:NextNumber(-0.02, 0.02)
-			local y = floorY + layer * 0.25 + p.h * BREAD_SCALE
+			for j = 1, i - 1 do
+				placeBread(c, j)
+			end
+			local b = placeBread(c, i)
 			part.Size = p.part.Size * BREAD_SCALE
-			cf = CFrame.new(x, y, z) * CFrame.Angles(0, rng:NextNumber(-0.1, 0.1), 0)
+			-- bottom half hangs below the rim, top half sits on it
+			local y = if k == 1 then b.y - part.Size.Y / 2 else b.y + part.Size.Y / 2
+			cf = CFrame.new(b.x, y, b.z) * CFrame.Angles(0, b.yaw, 0)
 		elseif c.kind == "duerum" then
 			-- a stack of flatbreads, each a little off-centre and turned
-			cf = CFrame.new(p.x + rng:NextNumber(-0.05, 0.05), floorY + (i - 1) * 0.042 + p.h, p.z + rng:NextNumber(-0.05, 0.05))
+			cf = CFrame.new(p.x + rng:NextNumber(-0.05, 0.05), floorY + (i - 1) * p.part.Size.Y + p.h, p.z + rng:NextNumber(-0.05, 0.05))
 				* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
 		else
 			-- boxes nest inside each other: every box sits a little higher and narrower than the one
@@ -118,7 +225,7 @@ local function crateItem(c: Crate, i: number): { BasePart }
 			part.Size = p.part.Size + Vector3.new(grow, 0, grow)
 			cf = CFrame.new(p.x, floorY + (i - 1) * 0.035 + p.h, p.z)
 		end
-		part.CFrame = c.bin.CFrame * cf * p.rot
+		part.CFrame = c.bin.CFrame * cf * (if c.kind == "classic" then CFrame.identity else p.rot)
 		part.Name = p.part.Name
 		table.insert(parts, part)
 	end
