@@ -320,7 +320,7 @@ local function stroke(player: Player)
 	if k.auto then
 		rating, score = "electric", 0.94
 	elseif not s.last or now - s.last > k.interval * 3 then
-		rating, score = "start", 0.9 -- first stroke (or after a pause)
+		rating, score = "start", 1 -- first stroke (or after a pause): no rhythm to judge yet, no penalty
 	else
 		local dt = now - s.last
 		if math.abs(dt - k.interval) <= k.window then
