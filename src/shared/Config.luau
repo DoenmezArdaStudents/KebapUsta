@@ -196,6 +196,46 @@ Config.Upgrades = {
 		req = { 2, 5 },
 		values = { 2, 3, 4 },
 	},
+	yard_bins = {
+		icon = "🗑️",
+		name = { de = "Größere Mülltonnen", en = "Larger Waste Bins" },
+		desc = { de = "Die Tonnen im Hinterhof fassen 75 % mehr.", en = "The backyard bins hold 75 % more." },
+		prices = { 220 },
+		req = { 2 },
+		values = { 1, 1.75 },
+	},
+	yard_light = {
+		icon = "💡",
+		name = { de = "Hofbeleuchtung", en = "Backyard Lighting" },
+		desc = { de = "Helle Strahler im ganzen Hinterhof.", en = "Bright floodlights all over the backyard." },
+		prices = { 160 },
+		req = { 2 },
+		values = { false, true },
+	},
+	yard_roof = {
+		icon = "⛺",
+		name = { de = "Überdachte Lieferzone", en = "Covered Unloading Area" },
+		desc = { de = "Ein Vordach über der Lieferzone und dem Hintereingang.", en = "A canopy over the unloading area and the back entrance." },
+		prices = { 380 },
+		req = { 3 },
+		values = { false, true },
+	},
+	yard_storage = {
+		icon = "🏗️",
+		name = { de = "Lagerregal im Hof", en = "Backyard Storage Rack" },
+		desc = { de = "Ein zusätzliches Regal mit 8 Plätzen im Hinterhof.", en = "An extra rack with 8 slots in the backyard." },
+		prices = { 450 },
+		req = { 3 },
+		values = { false, true },
+	},
+	yard_pavement = {
+		icon = "🌷",
+		name = { de = "Pflaster & Deko", en = "Pavement & Decoration" },
+		desc = { de = "Neues Pflaster, Blumenkübel und eine Bank für die Pause.", en = "New paving, flower tubs and a bench for breaks." },
+		prices = { 300 },
+		req = { 3 },
+		values = { false, true },
+	},
 	premium = {
 		icon = "⭐",
 		name = { de = "Premium-Zutaten", en = "Premium Ingredients" },
@@ -219,6 +259,21 @@ Config.Upgrades = {
 Config.UpgradeOrder = {
 	"delivery", "toaster", "spit_burner", "storage", "tray",
 	"queue", "decor", "tables", "premium", "lounge",
+	"yard_bins", "yard_light", "yard_roof", "yard_storage", "yard_pavement",
+}
+
+-- Waste & cleanliness (Server/WasteService, issues #12–#14)
+Config.Waste = {
+	BinCap = { general = 8, plastic = 6, organic = 6 }, -- bags / items per outdoor container
+	KitchenCap = 4, -- discarded meals / wiped trash until the kitchen bin's bag is full
+	MaxItems = 14, -- waste objects lying around at most (extra goes straight into the kitchen bin)
+	ScrapsEvery = { 6, 9 }, -- vegetable portions per bowl of scraps
+	PackagingEvery = { 5, 8 }, -- packed meals per piece of plastic packaging
+	PenaltyInside = 0.045, -- cleanliness lost per waste object inside the restaurant
+	PenaltyOutside = 0.015, -- … lying in the backyard
+	PenaltyFullBin = 0.04, -- per full outdoor container
+	PenaltyMax = 0.5,
+	CollectionPrice = 25, -- paid waste collection (garbage truck)
 }
 
 function Config.UpgradeValue(upgrades: { [string]: number }?, id: string): any

@@ -201,13 +201,15 @@ end
 ---------------------------------------------------------------------------
 -- driver
 ---------------------------------------------------------------------------
-local function newDriver(): (Model?, Humanoid?, AnimationTrack?)
+local DRIVER_LOOK = { skin = Color3.fromRGB(214, 170, 130), shirt = Color3.fromRGB(222, 64, 36), pants = Color3.fromRGB(46, 50, 60), shoes = Color3.fromRGB(30, 30, 30), hair = Color3.fromRGB(60, 40, 30), hat = true, hatColor = Color3.fromRGB(222, 64, 36) }
+
+local function newDriver(look: { [string]: any }?, name: string?): (Model?, Humanoid?, AnimationTrack?)
 	local ok, rig = pcall(CustomerService.NewRig)
 	if not ok or not rig then
 		return nil
 	end
-	pcall(CustomerService.Dress, rig, { skin = Color3.fromRGB(214, 170, 130), shirt = Color3.fromRGB(222, 64, 36), pants = Color3.fromRGB(46, 50, 60), shoes = Color3.fromRGB(30, 30, 30), hair = Color3.fromRGB(60, 40, 30), hat = true, hatColor = Color3.fromRGB(222, 64, 36) })
-	rig.Name = "DeliveryDriver"
+	pcall(CustomerService.Dress, rig, look or DRIVER_LOOK)
+	rig.Name = name or "DeliveryDriver"
 	local hum = rig:FindFirstChildOfClass("Humanoid")
 	if not hum then
 		return rig
@@ -359,5 +361,15 @@ function DeliveryVanService.Run(load: { any }, hooks: { spot: () -> CFrame, unlo
 		error(err, 0)
 	end
 end
+
+-- shared with other vehicles (Server/GarbageTruckService): NPC worker, walking, carrying, timeline
+DeliveryVanService.Kit = {
+	newWorker = newDriver,
+	walkTo = walkTo,
+	carry = carry,
+	setPhase = setPhase,
+	runPhase = runPhase,
+	pose = pose,
+}
 
 return DeliveryVanService

@@ -3,6 +3,7 @@
 -- from the same phase + elapsed time, so all players see the same smooth movement.
 --
 -- Phases:  arrive  – drive along the back street (eastbound lane) and brake past the gate
+--          truck_arrive / truck_parked / truck_depart – the garbage truck stops on the street at the gate
 --          reverse – back in through the gate into the delivery area (rear doors face the back door)
 --          parked  – unloading (static)
 --          depart  – drive out of the gate and away down the back street
@@ -13,6 +14,10 @@ local VanRoute = {}
 local LANE = -56.8 -- eastbound lane of the back street (driving on the right)
 local GATE_X = 29
 VanRoute.PARK_Z = -37.5 -- van centre when parked (rear face at about z -30.9)
+VanRoute.TRUCK_X = 33 -- garbage truck centre when stopped (18 long: rear hopper at x ≈ 24, by the gate)
+
+-- static phases: the end pose of a moving phase
+local STATIC = { parked = "reverse", truck_parked = "truck_arrive" }
 
 type Seg = { kind: "line" | "bez", p: { Vector3 } }
 type Phase = { segs: { Seg }, reverse: boolean, speed: number, easeIn: boolean, easeOut: boolean, points: { Vector3 }?, dist: { number }?, length: number? }
@@ -33,6 +38,9 @@ local PHASES: { [string]: Phase } = {
 		easeIn = true,
 		easeOut = true,
 	},
+	-- garbage truck (Server/GarbageTruckService): stops on the street with its rear hopper at the gate
+	truck_arrive = { segs = { { kind = "line", p = { v(-170, LANE), v(VanRoute.TRUCK_X, LANE) } } }, reverse = false, speed = 20, easeIn = false, easeOut = true },
+	truck_depart = { segs = { { kind = "line", p = { v(VanRoute.TRUCK_X, LANE), v(230, LANE) } } }, reverse = false, speed = 14, easeIn = true, easeOut = false },
 	depart = {
 		segs = {
 			{ kind = "line", p = { v(GATE_X, VanRoute.PARK_Z), v(GATE_X, -48) } },
@@ -106,10 +114,10 @@ end
 
 -- the van's ground pose (CFrame, front = -Z) and speed sign for a phase at `t` seconds in
 function VanRoute.Pose(phase: string, t: number): (CFrame, number)
-	if phase == "parked" or not PHASES[phase] then
-		local ph = PHASES.reverse
+	if STATIC[phase] or not PHASES[phase] then
+		local ph = PHASES[STATIC[phase] or "reverse"]
 		local pos, dir = sample(ph, ph.length :: number)
-		return CFrame.lookAt(pos, pos - dir), 0
+		return CFrame.lookAt(pos, pos + (ph.reverse and -dir or dir)), 0
 	end
 	local ph = PHASES[phase]
 	local dur = VanRoute.Duration(phase)

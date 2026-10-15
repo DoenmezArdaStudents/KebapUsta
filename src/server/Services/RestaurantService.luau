@@ -339,6 +339,9 @@ local function track(key: string, model: Instance?)
 	return tracked[key]
 end
 
+-- other services add their own upgrade visuals here (BackyardService, WasteService …)
+RestaurantService.WorldUpgradeHooks = {} :: { ({ [string]: number }) -> () }
+
 function RestaurantService.ApplyWorldUpgrades()
 	local r = restaurant()
 	if not r then
@@ -380,6 +383,12 @@ function RestaurantService.ApplyWorldUpgrades()
 	end
 	if tracked.loungeOff then
 		setVisible(tracked.loungeOff.model, not built, tracked.loungeOff.parent)
+	end
+	for _, hook in ipairs(RestaurantService.WorldUpgradeHooks) do
+		local ok, err = pcall(hook, u)
+		if not ok then
+			warn("[RestaurantService] world upgrade hook:", err)
+		end
 	end
 	RestaurantService.UpdateBoards()
 end

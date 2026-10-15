@@ -21,6 +21,8 @@ local DeliveryVanService = require(Services.DeliveryVanService)
 local IngredientData = require(Shared.IngredientData)
 
 local LogisticsService = {}
+LogisticsService.EmptyBoxHook = nil :: ((Player, any, Vector3) -> ())?
+LogisticsService.HandsBusyHook = nil :: ((Player) -> boolean)?
 
 -- layout --------------------------------------------------------------------
 -- unloading spots in the backyard (Server/BackyardService): a row on the asphalt between the
@@ -312,7 +314,7 @@ end
 
 -- actions -------------------------------------------------------------------
 local function onPick(player: Player, part: BasePart)
-	if carrying[player] or (player.Character and player.Character:FindFirstChild("CarriedCone")) then
+	if carrying[player] or (player.Character and player.Character:FindFirstChild("CarriedCone")) or (LogisticsService.HandsBusyHook and LogisticsService.HandsBusyHook(player)) then
 		Net.Notify(player, "🙌 Du hast schon die Hände voll", nil, "warn")
 		return
 	end
@@ -424,6 +426,9 @@ local function interactHook(player: Player, part: BasePart, kind: string): boole
 		if b.n <= 0 then
 			table.remove(logi().boxes, i)
 			detach(player)
+			if LogisticsService.EmptyBoxHook then
+				task.spawn(LogisticsService.EmptyBoxHook, player, b, part.Position) -- cardboard waste (Server/WasteService)
+			end
 			Net.Notify(player, ("✅ Aufgefüllt (+%d) – Kiste ist leer"):format(add), nil, "success")
 		else
 			refreshCarryLabel(player, b)
@@ -646,6 +651,58 @@ local function buildWorld()
 		end
 	end
 	dropPart("ColdDrop", Vector3.new(4, 6, 4), COLD_DROP, "logi_cold", "Im Kühlraum einlagern")
+end
+
+-- upgrade "yard_storage": an extra rack against the back wall in the backyard (8 more slots).
+-- Its slots are appended, so saved slot numbers of the indoor racks never change.
+local YARD_SHELF = { x = 38.6, z = -22.4, group = 3 }
+local yardShelf = false
+function LogisticsService.AddYardShelf()
+	if yardShelf or not folder then
+		return
+	end
+	yardShelf = true
+	for _, y in ipairs(BOARD_Y) do
+		for _, dx in ipairs({ -1.2, 1.2 }) do
+			table.insert(slots, { cf = CFrame.new(YARD_SHELF.x + dx, y - 0.1 + BOX_SIZE.Y / 2, YARD_SHELF.z), group = YARD_SHELF.group })
+		end
+	end
+	dropPart("ShelfDropYard", Vector3.new(5.2, 8.8, 0.6), Vector3.new(YARD_SHELF.x, 4.5, YARD_SHELF.z - 1.3), "logi_shelf", "Ins Regal stellen", YARD_SHELF.group)
+	local lib = ServerStorage:FindFirstChild("Models") and ServerStorage.Models:FindFirstChild("Logistics")
+	local rack = lib and lib:FindFirstChild("Shelf") :: BasePart?
+	if rack then
+		local r2 = rack:Clone()
+		r2.Size = Vector3.new(5, 8.8, 1.8)
+		r2.CFrame = CFrame.new(YARD_SHELF.x, 4.5, YARD_SHELF.z) * CFrame.Angles(0, math.pi, 0)
+		r2.Anchored = true
+		r2.Parent = folder
+	else
+		-- primitive rack: posts and four boards
+		local m = Instance.new("Model")
+		m.Name = "YardRack"
+		for _, x in ipairs({ -2.45, 2.45 }) do
+			for _, z in ipairs({ -0.8, 0.8 }) do
+				local p = Instance.new("Part")
+				p.Size = Vector3.new(0.18, 9, 0.18)
+				p.CFrame = CFrame.new(YARD_SHELF.x + x, 4.6, YARD_SHELF.z + z)
+				p.Color = Color3.fromRGB(40, 90, 170)
+				p.Material = Enum.Material.Metal
+				p.Anchored = true
+				p.Parent = m
+			end
+		end
+		for _, y in ipairs(BOARD_Y) do
+			local b = Instance.new("Part")
+			b.Size = Vector3.new(5, 0.15, 1.8)
+			b.CFrame = CFrame.new(YARD_SHELF.x, y - 0.1, YARD_SHELF.z)
+			b.Color = Color3.fromRGB(240, 140, 30)
+			b.Material = Enum.Material.Metal
+			b.Anchored = true
+			b.Parent = m
+		end
+		m.Parent = folder
+	end
+	render()
 end
 
 -- client state: incoming orders, boxes waiting, warehouse fill

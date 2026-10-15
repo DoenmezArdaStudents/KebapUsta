@@ -206,6 +206,12 @@ function BackDoorService.SetOpen(open: boolean)
 	Net.Sound(nil, open and "door_open" or "door_close", blocker.Position)
 end
 
+-- staff (cleaners carrying waste out) open the door and keep it open for a moment
+function BackDoorService.Use()
+	lastUse = os.clock()
+	BackDoorService.SetOpen(true)
+end
+
 local function anyoneNear(pos: Vector3, dist: number): boolean
 	for _, p in ipairs(Players:GetPlayers()) do
 		local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
