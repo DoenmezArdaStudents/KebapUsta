@@ -189,7 +189,8 @@ local function deliveryZone()
 		local x = d.x0 + 1 + i * 2
 		part("DeliveryHatch", Vector3.new(0.35, 0.02, 3.4), CFrame.new(x, y + 0.01, d.z1 - 1.6) * CFrame.Angles(0, math.rad(40), 0), C.yellow, Enum.Material.SmoothPlastic, DECO)
 	end
-	local text = box("DeliveryText", d.x0 + 2, y, d.z0 + 2, d.x1 - 2, y + 0.03, d.z0 + 5, C.asphalt, Enum.Material.Asphalt, DECO)
+	-- a Top-face SurfaceGui writes along the part's Z axis: long side on Z, readable from the gate
+	local text = part("DeliveryText", Vector3.new(3, 0.03, 9), CFrame.new((d.x0 + d.x1) / 2, y + 0.02, d.z0 + 6), C.asphalt, Enum.Material.Asphalt, DECO)
 	text.Transparency = 1
 	label(text, Enum.NormalId.Top, "LIEFERZONE", C.yellow)
 	-- bollards protecting the door and wall
@@ -207,7 +208,7 @@ local function wasteZone()
 	-- enclosure: low brick walls on three sides, open towards the yard (east)
 	wall("WasteWallN", w.x0, w.z1, w.x1, w.z1 + 0.6, 3.2)
 	wall("WasteWallS", w.x0, w.z0 - 0.6, w.x1, w.z0, 3.2)
-	box("WasteRoof", w.x0 - 0.3, 5.6, w.z0 - 0.9, w.x1 + 0.3, 5.8, w.z1 + 0.9, Color3.fromRGB(80, 84, 90), Enum.Material.CorrugatedSteel, { CastShadow = true })
+	box("WasteRoof", w.x0 - 0.3, 5.6, w.z0 - 0.9, w.x1 + 0.3, 5.8, w.z1 + 0.9, Color3.fromRGB(80, 84, 90), Enum.Material.Metal, { CastShadow = true })
 	for _, x in ipairs({ w.x1 - 0.2 }) do
 		for _, z in ipairs({ w.z0 - 0.3, w.z1 + 0.3 }) do
 			box("WasteRoofPost", x - 0.15, 3.2, z - 0.15, x + 0.15, 5.6, z + 0.15, C.metal, Enum.Material.Metal)
@@ -262,11 +263,11 @@ local function drains()
 	-- puddles collect around the drains
 	local puddles = { { 11.5, -38.6, 3.2, 2.2 }, { 26.6, -45.4, 4.5, 2.6 }, { -1.5, -44.2, 2.6, 1.8 }, { 16, -31.5, 2.2, 1.4 } }
 	for i, q in ipairs(puddles) do
-		local p = part("Puddle", Vector3.new(0.03, q[3], q[4]), CFrame.new(q[1], 0.17, q[2]) * CFrame.Angles(0, math.rad(i * 37), math.rad(90)), Color3.fromRGB(70, 80, 92), Enum.Material.Glass, DECO)
+		local p = part("Puddle", Vector3.new(0.03, q[3], q[4]), CFrame.new(q[1], 0.17, q[2]) * CFrame.Angles(0, math.rad(i * 37), math.rad(90)), Color3.fromRGB(46, 52, 58), Enum.Material.Glass, DECO)
 		p.Shape = Enum.PartType.Cylinder
 		p.Size = Vector3.new(0.03, math.max(q[3], q[4]), math.max(q[3], q[4]))
-		p.Transparency = 0.35
-		p.Reflectance = 0.25
+		p.Transparency = 0.5
+		p.Reflectance = 0.08
 	end
 end
 
@@ -344,14 +345,13 @@ function BackyardService.Init()
 	end
 	root = Instance.new("Model")
 	root.Name = "Backyard"
-	ground()
-	walls()
-	deliveryZone()
-	wasteZone()
-	lights()
-	drains()
-	props()
-	plants()
+	-- each section on its own: a broken decoration must never stop the game from starting
+	for name, step in pairs({ ground = ground, walls = walls, delivery = deliveryZone, waste = wasteZone, lights = lights, drains = drains, props = props, plants = plants }) do
+		local ok, err = pcall(step)
+		if not ok then
+			warn("[BackyardService] " .. name .. " failed: " .. tostring(err))
+		end
+	end
 	root.Parent = r
 end
 
