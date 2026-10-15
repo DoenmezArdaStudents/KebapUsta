@@ -201,14 +201,24 @@ end
 ---------------------------------------------------------------------------
 -- driver
 ---------------------------------------------------------------------------
+-- old part-based look, used while the customer assets are missing
 local DRIVER_LOOK = { skin = Color3.fromRGB(214, 170, 130), shirt = Color3.fromRGB(222, 64, 36), pants = Color3.fromRGB(46, 50, 60), shoes = Color3.fromRGB(30, 30, 30), hair = Color3.fromRGB(60, 40, 30), hat = true, hatColor = Color3.fromRGB(222, 64, 36) }
 
+-- without `look`: the supplier's work clothes (Shared/CustomerLooks.STAFF.driver), a different person
+-- every delivery; other vehicles pass their own old-style look table
 local function newDriver(look: { [string]: any }?, name: string?): (Model?, Humanoid?, AnimationTrack?)
 	local ok, rig = pcall(CustomerService.NewRig)
 	if not ok or not rig then
 		return nil
 	end
-	pcall(CustomerService.Dress, rig, look or DRIVER_LOOK)
+	local dressed = false
+	if not look then
+		local ok2, res = pcall(CustomerService.DressStaff, rig, "driver", math.random(1, 2 ^ 30))
+		dressed = ok2 and res == true
+	end
+	if not dressed then
+		pcall(CustomerService.Dress, rig, look or DRIVER_LOOK)
+	end
 	rig.Name = name or "DeliveryDriver"
 	local hum = rig:FindFirstChildOfClass("Humanoid")
 	if not hum then
