@@ -26,6 +26,17 @@ The repo is the source of truth and is synced into Studio with **Rojo**. The who
 GitHub: `DoenmezArdaStudents/KebapUsta`, branch `main`. Pushing needs collaborator write access
 (a "Permission denied" on push means the account hasn't been added yet – ask the repo owner).
 
+## Team rules (important)
+
+- **Never `rojo serve` into the shared Team Create place.** Rojo replaces the scripts and assets there
+  and overwrites other people's work. Build your own copy and work in that instead:
+  `rojo build -o KebapUsta.rbxl`, open that file in Studio, then `rojo serve` + Connect.
+- **One branch per issue, no direct commits to `main`.** Name it after the issue
+  (e.g. `feature/12-trash-containers`, `fix/6-cutting-flesh`), push it and open a Pull Request that
+  references the issue (`Closes #12`). `main` only changes through reviewed PRs.
+- Claude sessions follow the same rules: edit files in `src/`/`assets/` on a branch, test in a
+  locally built place, never edit scripts in the Team Create place via MCP.
+
 ## Daily workflow
 
 - **Code:** edit `.luau` files in `src/` (not in Studio) while `rojo serve` is connected. Edits made
