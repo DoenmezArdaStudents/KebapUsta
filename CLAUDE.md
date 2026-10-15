@@ -119,6 +119,13 @@ File naming follows Rojo: `X.server.luau` = Script, `X.client.luau` = LocalScrip
   `.rbxm` over the matching file in `assets/`. One root instance per file (Rojo requirement).
 - **New asset:** export it to `assets/<Service>/<Name>.rbxm` and add a node with `$path` to
   `default.project.json`, otherwise Rojo ignores it (and `rojo build` won't contain it).
+- **MeshParts and live sync:** the Rojo plugin cannot set `MeshPart.MeshId`. MeshParts that Rojo
+  *creates* in Studio (a new asset, or one missing in Studio) arrive without mesh – white boxes in
+  play, also on Accessory handles. `rojo build` files are fine. Fix: put the asset into Studio once
+  with its meshes (*Insert from File…* of the `.rbxm`, or `SerializationService:DeserializeInstancesAsync`
+  via MCP) under the same name and remove Rojo's copy; on later connects Rojo only matches it.
+- **Customer looks:** `ServerStorage.CustomerParts` (Blender meshes from `tools/npc`) and
+  `ServerStorage.CustomerAccessories` (free Roblox catalog items) – see `tools/npc/README.md`.
 - **Service properties** (Lighting, StarterPlayer, Workspace) are set via `$properties` in
   `default.project.json`. Changing them in Studio is not saved to the repo – update the JSON.
 - Studio also contains an empty `Rojo` ModuleScript directly under `game` (`return { API = nil }`),

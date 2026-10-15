@@ -1,9 +1,11 @@
 # Kundenmodelle mit Blender – Plan (Issue #1)
 
-> Status: **Plan**, noch nichts umgesetzt. Branch `issue-1-customer-models`.
-> Ziel aus dem Issue: Die Kunden sollen weiterhin nach Roblox aussehen, aber stimmig und hübsch
-> statt „katastrophal“. Gebaut wird mit Blender: eine `customer-creator.py` mit Methoden und dazu
-> 6 Skripte, die verschiedene Kundentypen konfigurieren. Die Kunden sollen zufällig variieren.
+> Status: **In Arbeit.** Die Kunden sind neu gestaltet (Runde 2, nach Feedback): eigener, leicht
+> menschlicher Körper für Frau und Mann, detaillierte 3D-Kleidung pro Körpersegment, Haare/Bärte/Hüte
+> für den Dynamic Head, 4 Kundentypen. In Studio ohne Upload getestet (EditableMesh).
+> Noch offen: Upload/Import, Einbau in `CustomerService`. Branch `issue-1-customer-models`.
+> Ziel aus dem Issue: Die Kunden sollen nach Roblox aussehen, aber stimmig und hübsch statt
+> „katastrophal“ – Menschen von heute mit Roblox-Proportionen, zufällig variiert.
 
 ## 1. Ausgangslage
 
@@ -30,7 +32,7 @@ haben dieselbe Plastikoptik.
 | Abhängigkeit | Wo | Konsequenz |
 | --- | --- | --- |
 | `lookSeed` → gleiches Aussehen bei jedem Besuch (Stammkunden) | `CustomerService.Spawn` | Auswahl muss deterministisch aus `Random.new(lookSeed)` kommen |
-| `BrowL`/`BrowR` mit `BrowWeld` + Attribut `Base` | `setMood` | Augenbrauen bleiben (oder `setMood` wird angepasst) |
+| ~~`BrowL`/`BrowR`~~ | `setMood` | **Erledigt:** Brauen-Klötze entfernt, Mimik über den Dynamic Head (siehe 4.3) |
 | `CustomerService.Dress` mit altem `look`-Format | `EmployeeService.makeWorker`, `LogisticsService` (Fahrer) | Alte Felder (`hat`, `hatColor`, `longHair`, `glasses`, …) weiter unterstützen |
 | Attribut `Accessory` zum Aufräumen, Handy-Geste nutzt es auch | `dress`, `idleGesture` | Neue Teile genauso markieren bzw. `Accessory`-Instanzen mit aufräumen |
 | Rig-Pool (max. 10 Rigs) | `releaseRig` | `dress` muss alles Alte vollständig entfernen |
@@ -49,230 +51,178 @@ haben dieselbe Plastikoptik.
 
 HipHeight 2.19. Vorne ist in Roblox **−Z**.
 
+**Gelenke** (RigAttachments, relativ zum `HumanoidRootPart`): Hals 1.049, Schulter (±1.0, 0.788),
+Ellbogen 0.051, Handgelenk −0.718, Taille −0.649, Hüfte (±0.5, −0.95), Knie −1.788, Knöchel −2.744.
+
+**Dynamic Head** (Standardkopf, per Raycast mit `PreciseConvexDecomposition` vermessen): im
+Querschnitt rund (Radius 0.58), oben flach mit enger Kante – im Modell ein Superellipsoid mit den
+Exponenten 2.0 (waagerecht) / 4.3 (senkrecht). Gesicht relativ zur Kopfmitte: Augen bei ±0.12 /
+**+0.27** (0.075 × 0.18), Mund bei −0.34 (Breite 0.38). Der Kopf hat **keine** Augenbrauen; die
+Stimmung zeigt der Mund über `FaceControls`.
+
 ## 2. Stil
 
-- **Roblox-Look:** wenige, klare Formen, weich abgerundet (Bevel), flache Farben, keine
-  realistischen Proportionen oder Texturen. Orientierung: aktuelle Avatar-Shop-Haare und -Hüte.
-- **Low-Poly:** grob ≤ 1500 Dreiecke pro Teil, ≤ 6 Teile pro Kunde (bei bis zu 10 Kunden plus
-  Passanten).
-- **Einfarbig pro Teil**, die Farbe wird erst im Spiel gesetzt (`MeshPart.Color`). So kann ein Mesh
-  in beliebig vielen Farbvarianten vorkommen, ohne dass Texturen hochgeladen werden müssen.
-  Teile aus zwei Farben (z. B. Brille: Gestell + Gläser) werden zwei Meshes.
+- **Menschen von heute, Roblox-Proportionen:** Körper weich gerundet statt Quader – Schultern,
+  Brust, Taille, Hüfte, Waden, Hände mit Daumen. Frau und Mann unterscheiden sich in Schultern,
+  Taille, Hüfte und Brust (dezent). Altersgruppen über Größe (`scale`), Frisuren, Haarfarben und
+  Kleidung.
+- **Moderne Kleidung mit Details als echte Geometrie:** Bündchen, Kragen, Knopfleisten, Taschen,
+  Ziernähte, Gürtelschlaufen, Kordeln, Sohlen, Schnürsenkel.
+- **Gesicht frei halten:** Haare und Hüte enden vorne über +0.41 (Augen), Bärte bleiben unter dem
+  Mund. `build.py` prüft das bei jedem Build und bricht sonst ab.
+- **Einfarbig pro Mesh**, Farbe kommt erst im Spiel (`MeshPart.Color`). Mehrfarbige Stücke
+  (Sneaker: Obermaterial + Sohle) werden mehrere Meshes. Keine Texturen nötig.
+- **Budget:** ≤ 1 500–4 400 Dreiecke pro Mesh (Oberteile am meisten), ein Kunde hat ~25 Meshes und
+  ~30 000 Dreiecke. Nichts wird verlustbehaftet reduziert; `build.py` meldet, falls doch.
 
 ## 3. Aufbau der Blender-Pipeline
 
 ```
 tools/blender/
-  customer_creator.py      Bibliothek: Szene, Referenzkörper, Formen, Teile, Export, Vorschau
-  customers/
-    student.py             6 Kundentypen (Konfiguration + typ-eigene Teile)
-    business.py
-    worker.py
-    senior.py
-    tourist.py
-    sporty.py
-  build.py                 Einstiegspunkt: baut alles, exportiert, rendert Vorschau, erzeugt Luau
-  out/                     Build-Ergebnis (gitignored): CustomerParts.fbx, preview_*.png
+  customer_creator.py      Kern: Rig-Maße, Profile (Querschnitte), Hüllen, Kopf, Registry,
+                           Würfeln (roll_look), Zusammenbau, FBX-/Studio-Export, Vorschau
+  parts/
+    body.py                Körper Mann/Frau (14 Segmente, Kopf liefert Roblox)
+    clothing.py            tshirt, hoodie, shirt, tie, blazer, cardigan, jeans, trousers,
+                           joggers, skirt, belt, sneakers, dress_shoes
+    hair.py                hair_crop, hair_sidepart, hair_curly_top, hair_buzz, hair_receding,
+                           hair_long, hair_bob, hair_ponytail, hair_bun, hair_curly_long,
+                           hair_perm, beard_full, beard_stubble, cap, beanie, flat_cap,
+                           glasses, headphones
+    accessories.py         backpack, crossbody, watch, cane
+  customers/               Kundentypen (reine Konfiguration): student, business, casual, senior
+  build.py                 baut + prüft alles, exportiert, rendert Vorschauen
+  studio_preview.luau      Studio-Test ohne Upload (EditableMesh)
+  studio_preview.project.json   Rojo-Projekt nur für die Testdaten
+  out/                     Build-Ergebnis (gitignored)
 ```
-
-Aufruf ohne Oberfläche:
 
 ```sh
-blender -b -P tools/blender/build.py -- --seed 42 --preview
+blender -b -P tools/blender/build.py -- --seed 42 --preview   # ~30 s
 ```
 
-### 3.1 `customer_creator.py` – Methoden
+Ergebnis in `out/`: `CustomerParts.fbx` (alle 267 Meshes + `Ref_*`-Anker), `Customers.blend`
+(8 Beispiel-Kunden), `people*.png`, `preview_<typ>.png`, `studio/` (Daten für den Studio-Test).
 
-- **Szene & Einheiten:** `new_scene()` leert die Szene und setzt 1 Blender-Einheit = 1 Stud.
-  Blender ist Z-up, Roblox ist Y-up mit −Z vorne. Die Achsen werden **nur beim FBX-Export**
-  umgerechnet (`axis_forward="-Z"`, `axis_up="Y"`), modelliert wird ganz normal in Blender.
-- **Referenzkörper:** `reference_body()` baut den R15-Rig mit den gemessenen Maßen aus Quadern
-  nach. Er dient zum Modellieren und für die Vorschau-Renderings und wird nicht exportiert. Dazu
-  kommen **Anker** (`Ref_Head`, `Ref_UpperTorso`, …): kleine Quader mit exakt der Rig-Größe, die
-  *mit* exportiert werden. Mit ihnen werden beim Import Maßstab und Position kalibriert
-  (siehe 4.2).
-- **Grundformen:** `rounded_box`, `capsule`, `sphere`, `torus`, `cylinder`, `shell` (dünne Hülle um
-  einen Körperteil, für Jacken/Westen), dazu `bevel`, `mirror_x`, `subdivide`, `smooth_shade`,
-  `apply_all` und `decimate_to(tris)` für das Budget.
-- **Teile-Builder** (geben je ein Objekt zurück, das korrekt am Referenzkörper sitzt):
-  - Haare: `hair_short`, `hair_long`, `hair_bun`, `hair_ponytail`, `hair_curly`, `hair_afro`,
-    `hair_mohawk`, `hair_sidepart`, `hair_buzz`
-  - Kopf: `cap`, `beanie`, `beret`, `hard_hat`, `headband`, `sun_hat`
-  - Gesicht: `glasses_round`, `glasses_square`, `sunglasses`, `beard_full`, `beard_stubble`,
-    `mustache`
-  - Körper: `jacket_open`, `vest`, `hoodie_hood`, `scarf`, `tie`
-  - Extras: `backpack`, `shoulder_bag`, `watch`, `headphones`, `camera`, `cane`
-  - Jeder Builder nimmt einen `variant`/`rng`-Parameter, z. B. Haarlänge, Pony links/rechts oder
-    Schirm der Kappe. So entstehen von einer Frisur 2–3 Mesh-Varianten.
-- **Metadaten:** Jedes Teil bekommt einen Namen (`Hair_Short_A`) und Custom Properties:
-  `attach` (Roblox-Attachment, z. B. `HairAttachment`), `slot` (`hair`, `hat`, `face`, …) und
-  `colorSlot` (`hair`, `shirt`, `accent`, `fixed:#202020`, …). Diese Daten landen in der erzeugten
-  Luau-Datei (3.3), nicht im FBX, weil der Roblox-Importer Custom Properties ignoriert.
-- **Export:** `export_fbx(objects, path)` exportiert alle Teile plus Anker in **eine** FBX-Datei
-  (ein Import in Studio statt dreißig).
-- **Vorschau:** `render_lineup(looks, path)` stellt mehrere zufällige Kunden auf den Referenzkörper
-  und rendert sie mit Workbench/EEVEE als PNG. So lässt sich die Zufallsvielfalt beurteilen, ohne
-  Studio zu öffnen.
+### 3.1 Wie die Formen entstehen
 
-### 3.2 Die 6 Kundentypen (`customers/*.py`)
+- **Koordinaten:** modelliert wird in Roblox-Koordinaten relativ zum `HumanoidRootPart`
+  (`rbx()` rechnet nach Blender um). Die Achsen stellt erst der FBX-Export wieder auf Roblox.
+- **Profile:** Ein Körpersegment ist eine Folge von Querschnitten (Superellipsen) entlang einer
+  Achse, mit Catmull-Rom geglättet. `solid()` macht daraus den Körper, `garment()` eine Hülle mit
+  Abstand und Dicke (auch vorne offen für Jacken), `capped_shell()` Ärmel mit geschlossener
+  Schulter, `patch()` aufgesetzte Stücke (Taschen, Kragen, Revers), `line()` Nähte und Kordeln.
+  Abstände gehen entlang echter 3D-Normalen. **Weil die Kleidung dieselben Profile nutzt wie der
+  Körper, sitzt sie immer.**
+- **Gelenke:** Die Segmente überlappen an den Gelenken so, dass das untere unter das obere greift
+  (keine Stufen, keine flimmernden Nähte). Die Gelenke selbst bleiben die des Standard-Rigs, damit
+  die Roblox-Animationen passen.
+- **Kopfteile:** `head_shell()` (Haube mit beliebiger Unterkante, Dicke, Volumen, Locken),
+  `head_patch()` (Bärte, Haarkranz) auf der vermessenen Kopfform.
+- **Metadaten pro Mesh:** `part`, `variant`, `body` (m/w), `slot`, `anchor` (R15-Segment, an das
+  es geschweißt wird), `attach` (nur Kopfteile) und `colorSlot` (`skin`, `top`, `outer`,
+  `bottom`, `shoes`, `hair`, `accent`, `fixed:#…`, `mix:hair:skin:0.45`, `shade:…`).
 
-Jede Datei ist reine Konfiguration und kann optional eigene Teile bauen:
+### 3.2 Kundentypen (`customers/*.py`)
 
-```python
-ARCHETYPE = {
-    "id": "student",
-    "name": {"de": "Student", "en": "Student"},
-    "weight": 3,                       # Häufigkeit im Spiel
-    "scale": {"height": (0.95, 1.03), "width": (0.9, 1.05)},
-    "palettes": {
-        "shirt":  ["#3a6fd8", "#d8483a", "#3aa86b", "#f2f2f2", "#2b2b30"],
-        "pants":  ["#2f3a55", "#1f1f24", "#5a6e8c"],
-        "shoes":  ["#f0f0f0", "#202020"],
-        "hair":   ["#1e1914", "#5a3c1e", "#c8a05a"],
-        "accent": ["#f0b428", "#7a3c96"],
-    },
-    "slots": {                          # Gewichte; None = nichts
-        "hair": {"hair_short": 3, "hair_curly": 2, "hair_sidepart": 2, "hair_bun": 1},
-        "hat":  {None: 6, "beanie": 2, "cap": 2},
-        "face": {None: 6, "glasses_round": 2},
-    },
-    "extras": {"backpack": 0.6, "headphones": 0.35, "watch": 0.2},  # Wahrscheinlichkeiten
-}
+Je Typ: Gewicht, Körper (m/w), Größenbereich, Farbpaletten und Slot-Tabellen – auch getrennt nach
+Körper (`{"m": {...}, "w": {...}}`). `"shirt:A"` erzwingt eine Variante, ein Palettenwert als
+String übernimmt die Farbe eines anderen Slots (Anzughose = Sakko). Unter Hüten werden nur
+passende Frisuren gewählt (Buzzcut, Haarkranz, Pferdeschwanz).
 
-def build(cc, rng):                     # optional: typ-eigene Teile
-    return []
-```
+| Typ | Größe | Erkennungsmerkmale |
+| --- | --- | --- |
+| `student` | 0.93–0.98 | Hoodie/T-Shirt, Jeans/Jogger/Rock, Sneaker, Rucksack, Kopfhörer, Kappe/Beanie |
+| `business` | 0.97–1.03 | Hemd, Sakko, Anzughose/Rock, Krawatte, Lederschuhe, Uhr, eckige Brille |
+| `casual` | 0.96–1.03 | T-Shirt/Hoodie/Kurzarmhemd, Strickjacke, Jeans/Chino, Bart, Umhängetasche |
+| `senior` | 0.94–0.99 | graue Haare/Haarkranz/Dauerwelle, Strickjacke, Brille, Schiebermütze, Gehstock |
 
-| Typ | Erkennungsmerkmale |
-| --- | --- |
-| `student` | Rucksack, Kopfhörer, Beanie/Kappe, bunte Shirts |
-| `business` | Krawatte, Seitenscheitel, dunkle Jacke, Aktentasche/Umhängetasche |
-| `worker` | Bauhelm oder Kappe, Warnweste, Bart häufig, kräftigere Statur |
-| `senior` | graue/weiße Haare oder Glatze, Brille, Barett, Gehstock, Strickjacke |
-| `tourist` | Sonnenhut, Sonnenbrille, Kamera, Umhängetasche, helle Farben |
-| `sporty` | Stirnband, Pferdeschwanz/Buzzcut, Hoodie, Sportfarben |
-
-VIP und Kritiker bekommen eigene, feste Regeln (dunkle Kleidung, Barett) wie heute.
-
-### 3.3 `build.py`
-
-1. Alle Kundentypen laden, die benötigten Teile sammeln (Vereinigungsmenge plus die
-   typ-eigenen Teile).
-2. Jedes Teil einmal bauen und auf das Budget prüfen (Dreiecke, ein Material, Name eindeutig).
-3. `out/CustomerParts.fbx` exportieren (Teile + Anker).
-4. Mit `--preview`: pro Typ eine Reihe mit ~8 zufälligen Kunden rendern (`out/preview_<typ>.png`).
-5. **`src/shared/CustomerLooks.luau` erzeugen.** Das ist der Katalog fürs Spiel: Typen, Gewichte,
-   Paletten, Slots, Extras und pro Teil `attach`/`slot`/`colorSlot`. Die Datei bekommt den Kopf
-   „generiert von tools/blender/build.py – nicht von Hand ändern“. Dadurch gibt es **eine**
-   Quelle der Wahrheit: die Python-Konfiguration. Balancing (Häufigkeiten, Farben) passiert dort.
+Weitere Typen (z. B. Arbeiter, Tourist, Sportler) sind nur noch eine neue Konfigurationsdatei,
+die Teile sind gemeinsam.
 
 ## 4. Weg ins Spiel
 
-### 4.1 Teile als echte Roblox-`Accessory`
+### 4.1 Aufbau eines Kunden im Spiel
 
-Statt Quader anzuschweißen wird jedes Teil ein `Accessory` mit einem `Handle` (MeshPart) und einem
-Attachment, das so heißt wie das passende Rig-Attachment. `Humanoid:AddAccessory()` verschweißt es
-dann automatisch an der richtigen Stelle und berücksichtigt die Körperskalierung
-(`BodyHeightScale` usw.). Zuordnung:
-
-| Slot | Attachment am Rig |
-| --- | --- |
-| Haare | `HairAttachment` |
-| Hüte | `HatAttachment` |
-| Brille, Bart | `FaceFrontAttachment` |
-| Schal, Krawatte | `NeckAttachment` |
-| Rucksack | `BodyBackAttachment` |
-| Jacke/Weste | `BodyFrontAttachment` (starre Hülle, siehe 4.4) |
-| Tasche | `LeftCollarAttachment` / `WaistBackAttachment` |
-| Uhr | `LeftWristRigAttachment` |
+Der Rig bleibt der Standard-R15-Rig (`CreateHumanoidModelFromDescription`), also bleiben
+Animationen, Gelenke und der Dynamic Head mit Gesicht. Die 14 Roblox-Körperteile werden
+**unsichtbar** (`Transparency = 1`), stattdessen werden die Blender-Meshes (Körper + Kleidung +
+Accessoires) per `WeldConstraint` an ihr Segment (`anchor`) geschweißt; Position = Mitte des Meshes
+relativ zum `HumanoidRootPart`. Größe über `Model:ScaleTo(scale)`. So getestet in Studio
+(`studio_preview.luau`).
 
 ### 4.2 Import und „Bake“ (einmalig je Änderung der Meshes)
 
-1. `blender -b -P tools/blender/build.py` ausführen → `out/CustomerParts.fbx`.
-2. **Manuell in Studio** (braucht Upload-Rechte für das Spiel): *Avatar/3D Importer* →
-   `CustomerParts.fbx` importieren → als Model in den Workspace. Die Meshes werden dabei als Assets
-   hochgeladen. Diesen Schritt kann Claude nicht übernehmen, MCP kann keine Meshes hochladen.
-3. **Bake per MCP-Luau** (`execute_luau`):
-   - Maßstab aus dem Anker bestimmen: `s = 1.159 / Ref_Head.Size.X`. Der Importer kann die
-     Einheiten umrechnen, die Anker gleichen das aus.
-   - Für jedes MeshPart: Größe mal `s`, Position relativ zum Anker seines Körperteils →
-     `Accessory` + `Handle` + Attachment mit dem passenden `CFrame` bauen. Die Daten kommen aus
-     `Shared/CustomerLooks` (`attach`, `slot`).
-   - Anker löschen, Ergebnis als Ordner `ServerStorage.CustomerParts` ablegen.
+1. `blender -b -P tools/blender/build.py` → `out/CustomerParts.fbx`.
+2. **Manuell in Studio** (braucht Upload-Rechte für das Spiel): *3D Importer* →
+   `CustomerParts.fbx` importieren. Die Meshes werden dabei als Assets hochgeladen. Claude kann das
+   nicht übernehmen (MCP kann keine Meshes hochladen).
+3. **Bake per MCP-Luau:** Maßstab und Ausrichtung über die Anker kalibrieren (`Ref_Head`,
+   `Ref_Front` liegt vor dem Gesicht), dann jedes MeshPart mit Attributen `Anchor`/`Center` (aus dem
+   Manifest) in `ServerStorage.CustomerParts` ablegen, Anker löschen.
 4. Mit dem Export-Rezept aus `CLAUDE.md` nach `assets/ServerStorage/CustomerParts.rbxm` exportieren
-   und in `default.project.json` eintragen (`ServerStorage.CustomerParts`).
-5. Prüfen: `rojo build`, Teile-Anzahl und Namen zwischen Studio und Build vergleichen.
+   und in `default.project.json` eintragen. Danach braucht niemand mehr Blender – die Teile liegen
+   ganz normal im Projekt.
+
+Warum nicht ohne Upload (EditableMesh)? Das geht nur im Studio-Test: im Spiel muss die API extra
+freigeschaltet werden, und vor allem werden EditableMesh-Inhalte vom Server **nicht** an die Clients
+repliziert.
 
 ### 4.3 Änderungen im Code
 
-- **`Server/CustomerService`:**
-  - `randomLook(vip, rng)` → Typ nach `weight` ziehen, dann Farben aus den Paletten (mit leichtem
-    HSV-Jitter), Slots nach Gewicht, Extras nach Wahrscheinlichkeit und Skalierung im Bereich des
-    Typs. Alles über das übergebene `rng`, damit `lookSeed` deterministisch bleibt. Rückgabe:
-    `{ archetype, skin, shirt, pants, shoes, colors = {...}, parts = {"Hair_Curly_B", ...}, scale }`.
-  - `dress(rig, look)` → Körper färben wie bisher, alte Accessoires entfernen (`Accessory`-Attribut
-    **und** `Accessory`-Instanzen), Teile aus `ServerStorage.CustomerParts` klonen, nach `colorSlot`
-    einfärben, `Humanoid:AddAccessory()`. Augenbrauen bleiben, ihre Farbe kommt aus `hair`.
-  - **Altes Format weiter unterstützen:** Fehlt `look.parts`, wird es aus den alten Feldern
-    abgeleitet (`hat` → `Cap`, `longHair` → `Hair_Long`, `glasses` → `Glasses_Square`,
-    `vip` → `Beret`, …). Dann laufen `EmployeeService` und `LogisticsService` ohne Änderung weiter
-    und sehen trotzdem besser aus.
-  - Fallback: Fehlt `ServerStorage.CustomerParts` (z. B. noch nicht importiert), wird wie bisher
-    mit Quadern angezogen, damit das Spiel nie kaputtgeht.
-- **`Shared/CustomerLooks`** (generiert): reine Daten, keine Seiteneffekte (Regel für `Shared/`).
-- **`Main.server.luau`:** Studio-Debug-Befehl `start` (Session ohne Lobby-UI starten). Damit lassen
-  sich Kunden in automatischen Playtests spawnen und prüfen.
+- **Erledigt – Mimik:** Brauen-Klötze `BrowL`/`BrowR` entfernt. `setMood` setzt nur noch das
+  Attribut `Mood` am Kunden-Model; `Client/CustomerFaces` überblendet daraus die `FaceControls`
+  des Dynamic Head (Werte in `Shared/MoodFaces`). Grund: `FaceControls`-Werte werden **nicht**
+  vom Server zu den Clients repliziert (in einem Playtest geprüft), Attribute schon.
+- **Offen – `Server/CustomerService`:**
+  - `randomLook(vip, rng)` → Logik von `roll_look` aus Python übernehmen (Typ nach Gewicht, Körper,
+    Paletten mit Jitter, Slots, Extras, Größe), alles über `rng`, damit `lookSeed` bleibt.
+    Den Katalog erzeugt `build.py` als `Shared/CustomerLooks.luau` (eine Quelle der Wahrheit).
+  - `dress(rig, look)` → Körperteile unsichtbar, alte Teile entfernen, Meshes aus
+    `ServerStorage.CustomerParts` klonen, färben, anschweißen (4.1).
+  - Altes `look`-Format (EmployeeService, LogisticsService) weiter unterstützen bzw. ableiten;
+    Fallback auf die alten Quader, falls `CustomerParts` fehlt.
 
-### 4.4 Kleidung – stufenweise
+### 4.4 Leistung
 
-1. **Phase 1:** Körperteile einfärben (wie heute) plus starre Mesh-Accessoires (Weste, offene
-   Jacke als Hülle, Schal, Krawatte). Das ist schnell und robust und sieht schon deutlich besser
-   aus als die Platten.
-2. **Phase 2 (optional):** Klassische `Shirt`/`Pants`-Texturen (585×559-Template) in Blender
-   rendern, z. B. Knöpfe, Taschen, Kragen, Streifen. Die Bilder werden über Studio hochgeladen.
-   Das bringt Details ohne zusätzliche Meshes.
-3. **Phase 3 (optional, aufwendig):** Layered Clothing (`WrapLayer` mit Cage-Meshes), damit sich
-   Jacken und Hoodies beim Laufen mitverformen. Der Rig hat die `WrapTarget`s schon. Die Cages zu
-   bauen ist aber deutlich mehr Arbeit, deshalb erst, wenn Phase 1 steht.
+~25 Meshes und ~30 000 Dreiecke pro Kunde, bei 10 Kunden ~300 000 Dreiecke plus Passanten.
+MeshParts haben automatisches LOD; alle Teile sind `Massless`, ohne Kollision und Abfragen.
+Spätere Optimierung, falls nötig: verdeckte Körpersegmente (Oberkörper unter Pulli) weglassen und
+gleichfarbige Stücke eines Segments zusammenfassen.
 
 ## 5. Zufall und Vielfalt
 
-Zufall gibt es auf zwei Ebenen:
-
-- **In Blender:** mehrere Mesh-Varianten pro Teil (`variant`), gesteuert über `--seed`.
-- **Im Spiel (pro Kunde, aus `lookSeed`):** Typ, Hautton, Farben je Slot plus Jitter, Frisur,
-  Hut ja/nein, Gesichtsteile, 0–2 Extras und die Körperskalierung.
-
-Gegen Doppelgänger: Wie bei `recentOrders` merkt sich der Service die letzten ~5 Kombinationen aus
-Typ und Frisur. Wiederholt sich eine, wird einmal neu gewürfelt. Wichtig: nicht für Stammkunden mit
-festem `lookSeed`.
-
-Grob gerechnet ergeben 6 Typen × ~6 Frisuren × ~5 Hüte × ~4 Gesichtsteile × Farben weit über
-10 000 sichtbar verschiedene Kunden.
+- **Pro Kunde (aus `lookSeed`):** Typ, Frau/Mann, Hautton, Farben je Slot plus Jitter, Frisur,
+  Bart, Hut, Brille, Oberteil, Jacke, Hose/Rock, Schuhe, Extras, Größe.
+- **Varianten in Blender:** z. B. `hoodie` A/B (mit Reißverschluss), `jeans` A/B (Umschlag),
+  `cap` A/B (rückwärts), `glasses` A/B (rund/eckig).
+- Gegen Doppelgänger: die letzten ~5 Kombinationen aus Typ, Körper und Frisur merken und einmal neu
+  würfeln (nicht bei Stammkunden mit festem `lookSeed`).
 
 ## 6. Arbeitsschritte
 
-- [ ] `tools/blender/` anlegen, `out/` in `.gitignore`
-- [ ] `customer_creator.py`: Szene, Referenzkörper + Anker, Grundformen, Export, Vorschau
-- [ ] Erste Teile (2 Frisuren, Kappe, Brille), Testimport in Studio, Bake-Skript fertig machen
-      → **prüft die ganze Pipeline früh**, bevor viele Teile gebaut werden
-- [ ] Restliche Teile-Builder
-- [ ] 6 Typ-Konfigurationen + Vorschau-Renderings, mit dem Team abstimmen
+- [x] Pipeline `tools/blender/` (Kern, Teile-Module, Kundentypen, `build.py`), `out/` gitignored
+- [x] Runde 1: einfacher Kunde auf Klötzchen-Rig – vom Team als „nicht schön“ bewertet
+- [x] Runde 2: eigener Körper m/w, 3D-Kleidung (13 Stücke), 18 Kopfteile, 4 Accessoires,
+      4 Kundentypen, Prüfungen (Budget, Augen frei, Mund frei, Namen eindeutig)
+- [x] Gelenke und Dynamic Head in Studio vermessen, Kopfform danach korrigiert
+- [x] Studio-Test ohne Upload: `rojo serve tools/blender/studio_preview.project.json` verbinden,
+      `tools/blender/studio_preview.luau` ausführen → 8 Beispiel-Kunden in
+      `workspace.CustomerPreviewTest` auf echten R15-Rigs
+- [x] Mimik über `FaceControls` (Attribut `Mood` + `Client/CustomerFaces`), Brauen-Klötze entfernt
+- [ ] Mit dem Team abstimmen: Aussehen, Typen, Farben
+- [ ] Upload/Import in Studio, Bake, `assets/ServerStorage/CustomerParts.rbxm`
 - [ ] `build.py` erzeugt `Shared/CustomerLooks.luau`
-- [ ] Import + Bake + Export nach `assets/ServerStorage/CustomerParts.rbxm`, Eintrag in
-      `default.project.json`
-- [ ] `CustomerService`: neues `randomLook`/`dress`, Kompatibilität mit altem Format, Fallback
-- [ ] Debug-Befehl `start`, Playtest: 10 Kunden + Passanten spawnen, Screenshots, Konsole ohne Fehler
+- [ ] `CustomerService`: neues `randomLook`/`dress`, altes Format, Fallback
+- [ ] Playtest mit 10 Kunden + Passanten (Laufen, Sitzen, Gesten), Konsole ohne Fehler
 - [ ] Aufräumen, `CLAUDE.md` um den Blender-Workflow ergänzen
 
 ## 7. Offene Fragen
 
-1. **Wer importiert?** Der 3D-Importer lädt Meshes als Assets hoch. Das muss jemand mit
-   Upload-Rechten für das Spiel bzw. die Gruppe machen.
-2. **Gesichter:** Der Dynamic Head hat schon ein Gesicht. Reicht das, oder sollen verschiedene
-   Gesichter (Decals/Köpfe) dazukommen?
-3. **Kundentypen:** Passen die 6 Vorschläge (Student, Business, Arbeiter, Rentner, Tourist,
-   Sportler)?
-4. **Mitarbeiter und Fahrer:** Sollen sie auch eigene Blender-Teile bekommen (Kochmütze, Schürze,
-   Lieferanten-Kappe) oder nur automatisch über das alte Format profitieren?
-5. **Layered Clothing (Phase 3):** gewünscht oder bewusst weglassen?
+1. **Wer importiert?** Der 3D-Importer lädt Meshes als Assets hoch – das braucht Upload-Rechte für
+   das Spiel bzw. die Gruppe.
+2. **Mitarbeiter und Fahrer:** auch auf die neuen Körper umstellen (Kochjacke, Schürze,
+   Lieferanten-Kappe als neue Teile)?
+3. **Weitere Kundentypen** (Arbeiter, Tourist, Sportler) und VIP/Kritiker-Outfits?
+4. **Röcke** sind starr am Becken; beim Laufen schneiden die Beine leicht hinein. Reicht das, oder
+   später Layered Clothing?

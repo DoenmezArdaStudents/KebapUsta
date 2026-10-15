@@ -1,6 +1,11 @@
 -- Customer NPCs: appearance, navigation (direct moves + PathfindingService + teleport fallback),
 -- the behaviour state machine, patience, dialogue, eating and leaving. Also street pedestrians.
 --
+-- Appearance: customers and pedestrians wear a Shared/CustomerLooks look (rolled from lookSeed,
+-- put on by Server/CustomerAppearance: Blender meshes + free Roblox catalog items). If those
+-- assets are missing, and for staff / drivers (CustomerService.Dress with the old look table),
+-- the old part-based look below is used.
+--
 -- States: Entering -> Queuing -> Ordering -> WaitingForFood -> ReceivingFood -> Eating -> Leaving
 --         any waiting state -> Cancelled -> Leaving
 
@@ -15,7 +20,9 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local OrderLogic = require(Shared.OrderLogic)
 local DialogueConfig = require(Shared.DialogueConfig)
+local CustomerLooks = require(Shared.CustomerLooks)
 local Net = require(script.Parent.Net)
+local CustomerAppearance = require(script.Parent.CustomerAppearance)
 local RestaurantService = require(script.Parent.RestaurantService)
 local OrderService = require(script.Parent.OrderService)
 local FoodPreparationService = require(script.Parent.FoodPreparationService)
@@ -174,7 +181,7 @@ local function addRel(rig: Model, partName: string, name: string, sizeF: Vector3
 	return p
 end
 
--- eyebrows (welded with a Weld so the mood can tilt them), hairstyles, beards, jackets, bags …
+-- hairstyles, beards, jackets, bags … (the mood is shown by the Dynamic Head, see setMood)
 local function dressExtras(rig: Model, look)
 	local head = rig:FindFirstChild("Head") :: BasePart?
 	if not head then
@@ -188,27 +195,6 @@ local function dressExtras(rig: Model, look)
 				nv.Value = v
 			end
 		end
-	end
-	for i, x in ipairs({ -0.2, 0.2 }) do
-		local b = Instance.new("Part")
-		b.Name = i == 1 and "BrowL" or "BrowR"
-		b.Size = Vector3.new(0.3, 0.07, 0.05)
-		b.Color = look.hair or Color3.fromRGB(40, 30, 20)
-		b.Material = Enum.Material.SmoothPlastic
-		b.CanCollide = false
-		b.CanQuery = false
-		b.CanTouch = false
-		b.Massless = true
-		local w = Instance.new("Weld")
-		w.Name = "BrowWeld"
-		w.Part0 = head
-		w.Part1 = b
-		w.C0 = CFrame.new(x, 0.24, -0.6)
-		w:SetAttribute("Base", w.C0)
-		w.Parent = b
-		b.CFrame = head.CFrame * w.C0
-		b:SetAttribute("Accessory", true)
-		b.Parent = rig
 	end
 	if not look.hat then
 		local style = look.hairStyle
@@ -274,6 +260,7 @@ local function dressExtras(rig: Model, look)
 end
 
 local function dress(rig: Model, look)
+	CustomerAppearance.Strip(rig) -- the rig may come from the pool wearing a new look
 	for _, p in ipairs(rig:GetChildren()) do
 		if p:GetAttribute("Accessory") then
 			p:Destroy()
@@ -343,6 +330,17 @@ local function randomLook(vip: boolean, r: Random?)
 		bag = rng:NextNumber() < 0.15,
 		watch = rng:NextNumber() < 0.4,
 	}
+end
+
+-- new look from the seed; falls back to the old look if the assets are missing
+local function dressSeeded(rig: Model, lookSeed: number, vip: boolean)
+	if CustomerAppearance.Available() then
+		local look = CustomerLooks.Roll(Random.new(lookSeed), { vip = vip })
+		if CustomerAppearance.Dress(rig, look) then
+			return
+		end
+	end
+	dress(rig, randomLook(vip, Random.new(lookSeed)))
 end
 
 local function newRig(): Model?
@@ -891,23 +889,14 @@ local function headShake(c)
 	jointKick(motor(c.model, "RightLowerArm", "RightElbow"), CFrame.Angles(math.rad(70), 0, 0), 0.15, 0.7, 0.35)
 end
 
--- facial mood: eyebrows tilt (happy raised, annoyed / angry pulled together)
-local MOOD = { happy = { 0.04, 10 }, neutral = { 0, 0 }, annoyed = { -0.02, -14 }, angry = { -0.05, -28 } }
+-- facial mood: the model attribute "Mood" replicates; Client/CustomerFaces turns it into the
+-- Dynamic Head's FaceControls (Shared/MoodFaces) – FaceControls themselves do not replicate
 local function setMood(c, mood: string)
 	if c.mood == mood then
 		return
 	end
 	c.mood = mood
-	local d = MOOD[mood] or MOOD.neutral
-	for _, n in ipairs({ "BrowL", "BrowR" }) do
-		local b = c.model:FindFirstChild(n)
-		local w = b and b:FindFirstChild("BrowWeld") :: Weld?
-		local base = w and w:GetAttribute("Base")
-		if w and typeof(base) == "CFrame" then
-			local side = n == "BrowL" and 1 or -1
-			TweenService:Create(w, TweenInfo.new(0.35), { C0 = base * CFrame.new(0, d[1], 0) * CFrame.Angles(0, 0, math.rad(d[2] * side)) }):Play()
-		end
-	end
+	c.model:SetAttribute("Mood", mood)
 end
 CustomerService.SetMood = setMood
 
@@ -1075,8 +1064,8 @@ local function setAggressive(c)
 	c.aggressive = true
 	c.model:SetAttribute("Aggressive", true)
 	setMood(c, "angry")
-	-- face turns red with anger
-	local head = c.model:FindFirstChild("Head") :: BasePart?
+	-- face turns red with anger (new look: the Body_Head mesh, old look: the Roblox head)
+	local head = (c.model:FindFirstChild("Body_Head") or c.model:FindFirstChild("Head")) :: BasePart?
 	if head then
 		TweenService:Create(head, TweenInfo.new(1.5), { Color = head.Color:Lerp(Color3.fromRGB(215, 70, 60), 0.35) }):Play()
 	end
@@ -1544,8 +1533,7 @@ function CustomerService.Spawn(opts)
 	local pdef = DialogueConfig.Personalities[personality]
 	-- every guest gets a look seed so a future regular looks the same on every visit
 	local lookSeed = opts.lookSeed or rng:NextInteger(1, 2 ^ 30)
-	local look = randomLook(vip or opts.critic == true, Random.new(lookSeed))
-	dress(rig, look)
+	dressSeeded(rig, lookSeed, vip or opts.critic == true)
 	local hum = rig:FindFirstChildOfClass("Humanoid") :: Humanoid
 	local root = rig:FindFirstChild("HumanoidRootPart") :: BasePart
 	hum.WalkSpeed = Config.Customers.WalkSpeed * (personality == "impatient" and 1.2 or 1) * rng:NextNumber(0.9, 1.1)
@@ -1617,7 +1605,7 @@ local function spawnPedestrian()
 		return
 	end
 	pedestrians += 1
-	dress(rig, randomLook(false))
+	dressSeeded(rig, rng:NextInteger(1, 2 ^ 30), false)
 	local hum = rig:FindFirstChildOfClass("Humanoid") :: Humanoid
 	hum.WalkSpeed = rng:NextNumber(7, 11)
 	local near = rng:NextNumber() < 0.5
