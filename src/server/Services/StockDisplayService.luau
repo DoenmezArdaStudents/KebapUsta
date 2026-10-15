@@ -137,9 +137,10 @@ local function breadSlots(c: Crate): { BreadSlot }
 	local cellX, cellZ = innerX / nx, innerZ / nz
 	local yaw = if along then math.pi / 2 else 0 -- the mesh's X axis is the bread's length
 	local slack = math.max(math.min(cellX / 2 - lenX, cellZ / 2 - lenZ, BREAD_JITTER), 0)
+	local layer, valleys = {}, {}
 	for ix = 1, nx do
 		for iz = 1, nz do
-			table.insert(c.slots, { x = -innerX / 2 + (ix - 0.5) * cellX, z = -innerZ / 2 + (iz - 0.5) * cellZ, yaw = yaw, slack = slack })
+			table.insert(layer, { x = -innerX / 2 + (ix - 0.5) * cellX, z = -innerZ / 2 + (iz - 0.5) * cellZ, yaw = yaw, slack = slack })
 		end
 	end
 	-- valleys between neighbours that lie side by side (along their width)
@@ -147,9 +148,19 @@ local function breadSlots(c: Crate): { BreadSlot }
 		for iz = 1, if along then nz else nz - 1 do
 			local x = -innerX / 2 + (ix - (if along then 0 else 0.5)) * cellX
 			local z = -innerZ / 2 + (iz - (if along then 0.5 else 0)) * cellZ
-			table.insert(c.slots, { x = x, z = z, yaw = yaw, slack = slack })
+			table.insert(valleys, { x = x, z = z, yaw = yaw, slack = slack })
 		end
 	end
+	-- the first breads (the last ones left) lie in the middle, a bit towards the back so the front
+	-- wall doesn't hide them from the cook
+	local function nearMiddle(s1: BreadSlot, s2: BreadSlot): boolean
+		local back = -innerZ * 0.15
+		return s1.x ^ 2 + (s1.z - back) ^ 2 < s2.x ^ 2 + (s2.z - back) ^ 2
+	end
+	table.sort(layer, nearMiddle)
+	table.sort(valleys, nearMiddle)
+	table.move(layer, 1, #layer, 1, c.slots)
+	table.move(valleys, 1, #valleys, #layer + 1, c.slots)
 	return c.slots
 end
 
