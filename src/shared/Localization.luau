@@ -175,6 +175,8 @@ local S = {
 	sleep_title = { de = "Gute Nacht…", en = "Good night…" },
 	wake_title = { de = "Tag {day} · 10:00", en = "Day {day} · 10:00" },
 	wake_sub = { de = "Ausgeschlafen! Ab in den Laden.", en = "Well rested! Head into the shop." },
+	n_event_start = { de = "{icon} {name} {desc}", en = "{icon} {name} {desc}" },
+	n_event_end = { de = "{icon} {name} ist vorbei.", en = "{icon} {name} is over." },
 	n_rush = { de = "{period} Mehr Kunden kommen!", en = "{period} More customers incoming!" },
 	n_drink_taken = { de = "{item} aufs Tablett gestellt.", en = "{item} put on your tray." },
 	n_meal_to_tray = { de = "Gericht aufs Tablett gestellt.", en = "Meal put on your tray." },

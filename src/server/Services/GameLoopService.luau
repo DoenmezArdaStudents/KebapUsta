@@ -18,6 +18,10 @@ local GameLoopService = {}
 GameLoopService.DemandHook = nil :: (() -> number)?
 GameLoopService.SpecialSpawnHook = nil :: (() -> any)?
 GameLoopService.WageHook = nil :: (() -> number)?
+-- day events (Server/EventService): demand multiplier, event guests, per-tick update
+GameLoopService.EventDemandHook = nil :: (() -> number)?
+GameLoopService.EventSpawnHook = nil :: (() -> any)?
+GameLoopService.EventTickHook = nil :: ((number) -> ())?
 
 local rng = Random.new()
 local nightApplied: boolean? = nil
@@ -63,11 +67,19 @@ end
 local function spawnInterval(periodMul: number): number
 	local rep = RestaurantService.GetReputation()
 	local repMul = 1.25 - (rep - 1) * 0.12 -- rep 1 → 1.25, rep 5 → 0.77
-	local base = Config.Customers.BaseSpawnInterval * periodMul * repMul / (GameLoopService.DemandHook and GameLoopService.DemandHook() or 1)
+	local demand = (GameLoopService.DemandHook and GameLoopService.DemandHook() or 1) * (GameLoopService.EventDemandHook and GameLoopService.EventDemandHook() or 1)
+	local base = Config.Customers.BaseSpawnInterval * periodMul * repMul / demand
 	return math.max(Config.Customers.MinSpawnInterval, base * rng:NextNumber(0.75, 1.25))
 end
 
 local function spawnRegular(period)
+	-- guests of a running day event (school kids, football fans …)
+	if GameLoopService.EventSpawnHook then
+		local opts = GameLoopService.EventSpawnHook()
+		if opts then
+			return CustomerService.Spawn(opts)
+		end
+	end
 	-- regulars, critics & co. (Server/BusinessService)
 	if GameLoopService.SpecialSpawnHook then
 		local c = GameLoopService.SpecialSpawnHook()
@@ -164,6 +176,9 @@ local function runDay()
 			end
 			RestaurantService.Clock += dt * hoursPerSecond
 		end
+		if GameLoopService.EventTickHook and not RestaurantService.TutorialActive then
+			GameLoopService.EventTickHook(RestaurantService.Clock)
+		end
 		local period = periodFor(RestaurantService.Clock)
 		if period.key ~= lastPeriodKey then
 			lastPeriodKey = period.key
@@ -188,6 +203,9 @@ local function runDay()
 	-- 22:00 – closing time. The clock pauses; the day only ends once someone locks the shop
 	-- (key switch at the door or "Feierabend" on the laptop).
 	RestaurantService.Clock = Config.Day.EndHour
+	if GameLoopService.EventTickHook then
+		GameLoopService.EventTickHook(Config.Day.EndHour) -- ends a running event
+	end
 	RestaurantService.Open = false
 	RestaurantService.Phase = "after_hours"
 	RestaurantService.PeriodKey = "period_closed"

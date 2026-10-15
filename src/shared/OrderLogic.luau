@@ -254,7 +254,8 @@ function OrderLogic.GenerateOrder(rng: Random, opts)
 		end
 		table.insert(order.items, OrderLogic.GenerateItem(rng, itemOpts))
 	end
-	local drinkChance = (opts.simple or (opts.available and not opts.available.drinks)) and 0 or (0.45 + (count - 1) * 0.2)
+	-- opts.drinkChance: per-person chance set by a day event (Shared/Events), otherwise the default
+	local drinkChance = (opts.simple or (opts.available and not opts.available.drinks)) and 0 or (opts.drinkChance or (0.45 + (count - 1) * 0.2))
 	for _ = 1, count do
 		if rng:NextNumber() < drinkChance then
 			local d = IngredientData.DrinkOrder[rng:NextInteger(1, #IngredientData.DrinkOrder)]

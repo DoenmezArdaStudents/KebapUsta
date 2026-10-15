@@ -463,6 +463,7 @@ local TOAST = {
 	goal = { T.green, "🎯" },
 	vip = { T.gold, "⭐" },
 	rush = { T.accent, "🔥" },
+	event = { T.gold, "📣" },
 	day = { Color3.fromRGB(150, 130, 255), "🌙" },
 }
 

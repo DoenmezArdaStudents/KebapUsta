@@ -208,6 +208,9 @@ function OrderService.Complete(player: Player, c)
 		mood, payMul, tipMul = OrderService.ModHook(c)
 		satisfaction = math.clamp(satisfaction + mood, 0, 1)
 	end
+	if c.eventTip then
+		tipMul *= 1 + c.eventTip -- day event bonus (Shared/Events reward)
+	end
 	local stars = OrderLogic.Stars(satisfaction)
 	local personality = DialogueConfig.Personalities[c.personality]
 

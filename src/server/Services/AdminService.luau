@@ -12,6 +12,8 @@ local RestaurantService = require(Services.RestaurantService)
 local UnlockService = require(Services.UnlockService)
 local CustomerService = require(Services.CustomerService)
 local BusinessService = require(Services.BusinessService)
+local EventService = require(Services.EventService)
+local Events = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Events"))
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Progression = require(Shared.Progression)
@@ -136,6 +138,20 @@ C.spawn = function(p, v)
 		task.delay((i - 1) * 0.6, CustomerService.Spawn, {})
 	end
 	return ("%d Kunde(n)"):format(n)
+end
+C.event = function(_p, v)
+	local id = type(v) == "string" and v ~= "" and v or nil
+	if not id then
+		id = Events.List[math.random(1, #Events.List)].id
+	end
+	if not EventService.Start(id) then
+		local ids = {}
+		for _, e in ipairs(Events.List) do
+			table.insert(ids, e.id)
+		end
+		error("Events: " .. table.concat(ids, ", "), 0)
+	end
+	return "Event: " .. id
 end
 C.vip = function()
 	CustomerService.Spawn({ vip = true })

@@ -130,6 +130,7 @@ local SECTIONS = {
 	} },
 	{ "🕒 Spiel", {
 		{ "Uhrzeit setzen", "time" }, { "Tag beenden", "skipday" }, { "Ausbaustufe", "stage" }, { "Alles putzen", "clean" },
+		{ "Event starten (Wert = id / leer = zufällig)", "event" },
 	} },
 	{ "🧍 Kunden", {
 		{ "Kunden spawnen", "spawn" }, { "VIP", "vip" }, { "Kritiker", "critic" }, { "Wütender Kunde", "angry" }, { "Alle weg", "clearcustomers" },

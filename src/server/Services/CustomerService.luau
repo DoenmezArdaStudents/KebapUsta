@@ -1319,6 +1319,17 @@ function CustomerService.TakeOrder(player: Player, c, viaLaptop: boolean?, staff
 		forceMenu = c.tutorial and "kebap" or (c.favorite and c.favorite.menu) or nil,
 		forceMeat = c.tutorial and "chicken" or (c.favorite and c.favorite.meat) or nil,
 	}
+	-- day event guests (school kids, football fans …) prefer certain menus / drinks
+	local eo = c.eventOrder
+	if eo and not c.tutorial and not c.favorite then
+		opts.drinkChance = eo.drinks
+		if eo.menus and #eo.menus > 0 then
+			local m = eo.menus[rng:NextInteger(1, #eo.menus)]
+			if not (opts.available and opts.available.menus) or opts.available.menus[m] then
+				opts.forceMenu = m
+			end
+		end
+	end
 	-- a regular only orders their favourite while it is still on the menu
 	if c.favorite and opts.forceMenu and not (opts.available and opts.available.menus and opts.available.menus[opts.forceMenu]) then
 		opts.forceMenu, opts.forceMeat = nil, nil
@@ -1551,8 +1562,11 @@ function CustomerService.Spawn(opts)
 	hum.WalkSpeed = Config.Customers.WalkSpeed * (personality == "impatient" and 1.2 or 1) * rng:NextNumber(0.9, 1.1)
 	local name = opts.name or DialogueConfig.FirstNames[rng:NextInteger(1, #DialogueConfig.FirstNames)]
 	local decorMul = RestaurantService.UpgradeValue("decor")
-	local maxPatience = Config.Customers.BasePatience * pdef.patience * decorMul * (opts.groupSize and opts.groupSize > 1 and 1.3 or 1)
+	local maxPatience = Config.Customers.BasePatience * pdef.patience * decorMul * (opts.groupSize and opts.groupSize > 1 and 1.3 or 1) * (opts.patienceMul or 1)
 	local eat = rng:NextNumber() < Config.Customers.EatChance
+	if opts.takeaway ~= nil then
+		eat = not opts.takeaway
+	end
 	local c = {
 		id = nextId,
 		model = rig,
@@ -1576,6 +1590,10 @@ function CustomerService.Spawn(opts)
 		favorite = opts.favorite,
 		regularVisits = opts.regularVisits,
 		lookSeed = lookSeed,
+		-- day event guest (Server/EventService): order preferences and tip bonus
+		event = opts.event,
+		eventOrder = opts.eventOrder,
+		eventTip = opts.eventTip,
 	}
 	customers[c.id] = c
 	rig.Name = "Customer_" .. c.id
@@ -1586,6 +1604,7 @@ function CustomerService.Spawn(opts)
 	rig:SetAttribute("VIP", vip)
 	rig:SetAttribute("Regular", opts.regularVisits ~= nil)
 	rig:SetAttribute("Critic", opts.critic == true)
+	rig:SetAttribute("Event", opts.event)
 	rig:SetAttribute("Patience", 1)
 	rig:SetAttribute("State", "Entering")
 	local side = rng:NextNumber() < 0.5 and "SpawnL" or "SpawnR"
