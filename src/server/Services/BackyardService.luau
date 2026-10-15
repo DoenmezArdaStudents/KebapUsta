@@ -16,14 +16,14 @@ local CollectionService = game:GetService("CollectionService")
 local BackyardService = {}
 
 -- layout (studs). The restaurant's back wall outer face is z = -21, the neighbours' backs z = -22;
--- the storage room sticks out as an annex x[11,31] down to z = -24.
+-- the storage room sticks out as an annex x[11,31] down to z = -27.
 local X0, X1 = -12, 44 -- yard inside the walls
 local Z_WALL, Z_SOUTH = -21, -50
 local GATE0, GATE1 = 22, 36 -- vehicle gate in the south wall
 local WALL_H = 7
 
 BackyardService.Layout = {
-	delivery = { x0 = 21, x1 = 35, z0 = -42, z1 = -29 }, -- unloading area in front of the back door
+	delivery = { x0 = 21, x1 = 35, z0 = -45, z1 = -32 }, -- unloading area in front of the back door
 	waste = { x0 = -11, x1 = 3, z0 = -40, z1 = -28 }, -- waste disposal area (bins: #12)
 	gate = { x0 = GATE0, x1 = GATE1, z = Z_SOUTH },
 	street = { z0 = -64, z1 = -54 },
@@ -112,12 +112,12 @@ end
 ---------------------------------------------------------------------------
 local function ground()
 	-- concrete apron along the building, asphalt yard
-	box("Apron", X0, -0.2, -27, X1, 0.2, -24, C.concrete, Enum.Material.Concrete)
-	box("Apron", X0, -0.2, -24, 11, 0.2, -22, C.concrete, Enum.Material.Concrete) -- around the storage annex
-	box("Apron", 31, -0.2, -24, X1, 0.2, -22, C.concrete, Enum.Material.Concrete)
+	box("Apron", X0, -0.2, -27, 11, 0.2, -22, C.concrete, Enum.Material.Concrete) -- either side of the storage annex
+	box("Apron", 31, -0.2, -27, X1, 0.2, -22, C.concrete, Enum.Material.Concrete)
 	box("ApronWall", X0, -0.2, -22, 11, 0.2, Z_WALL, C.concrete, Enum.Material.Concrete) -- up to the restaurant (behind the neighbour it ends at -22)
 	box("Asphalt", X0, -0.2, Z_SOUTH, X1, 0.15, -27, C.asphalt, Enum.Material.Asphalt)
-	box("Kerb", X0, 0.15, -27.3, X1, 0.3, -27, C.cap, Enum.Material.Concrete, DECO)
+	box("Kerb", X0, 0.15, -27.3, 11, 0.3, -27, C.cap, Enum.Material.Concrete, DECO)
+	box("Kerb", 31, 0.15, -27.3, X1, 0.3, -27, C.cap, Enum.Material.Concrete, DECO)
 	-- back street: sidewalk + road with dashed centre line
 	local s = BackyardService.Layout.street
 	box("Sidewalk", -160, -0.2, s.z1, 160, 0.3, Z_SOUTH - 1, C.concrete, Enum.Material.Concrete)
@@ -199,7 +199,7 @@ local function deliveryZone()
 	label(text, Enum.NormalId.Top, "LIEFERZONE", C.yellow)
 	-- bollards protecting the door and wall
 	for _, x in ipairs({ d.x0 + 0.5, d.x1 - 0.5 }) do
-		part("Bollard", Vector3.new(3, 0.6, 0.6), CFrame.new(x, 1.6, -27.8), C.yellow, Enum.Material.Metal, { Shape = Enum.PartType.Cylinder, CFrame = CFrame.new(x, 1.6, -27.8) * CFrame.Angles(0, 0, math.rad(90)) })
+		part("Bollard", Vector3.new(3, 0.6, 0.6), CFrame.new(x, 1.6, -30.8), C.yellow, Enum.Material.Metal, { Shape = Enum.PartType.Cylinder, CFrame = CFrame.new(x, 1.6, -30.8) * CFrame.Angles(0, 0, math.rad(90)) })
 	end
 	local zone = box("DeliveryArea", d.x0, y, d.z0, d.x1, y + 0.05, d.z1, C.yellow, Enum.Material.SmoothPlastic, DECO)
 	zone.Transparency = 1
@@ -253,7 +253,7 @@ local function lights()
 		lampHead(CFrame.new(x + dir * 2.8, 12.8, z), 34, true)
 	end
 	-- wall lamps on the back of the restaurant (the door has its own)
-	for _, l in ipairs({ { -4, Z_WALL }, { 20, -24 } }) do -- -24: the storage annex
+	for _, l in ipairs({ { -4, Z_WALL }, { 20, -27 } }) do -- -24: the storage annex
 		part("WallLampArm", Vector3.new(0.2, 0.2, 0.8), CFrame.new(l[1], 9.2, l[2] - 0.4), C.darkMetal, Enum.Material.Metal, DECO)
 		lampHead(CFrame.new(l[1], 9.1, l[2] - 0.9), 22, false)
 	end
@@ -358,7 +358,7 @@ end
 
 local function upRoof()
 	-- canopy over the unloading area and the back entrance; high enough for the delivery van
-	local x0, x1, z0, z1, h = 19.4, 36.6, -43.5, -24.2, 9.8
+	local x0, x1, z0, z1, h = 19.4, 36.6, -46.5, -27.2, 9.8
 	for _, x in ipairs({ x0 + 0.3, x1 - 0.3 }) do
 		for _, z in ipairs({ z0 + 0.3, (z0 + z1) / 2 }) do
 			part("CanopyPost", Vector3.new(0.45, h, 0.45), CFrame.new(x, h / 2, z), C.darkMetal, Enum.Material.Metal)
@@ -371,13 +371,13 @@ local function upRoof()
 		part("CanopyRib", Vector3.new(0.12, 0.12, z1 - z0 + 0.4), CFrame.new(x0 + i * (x1 - x0) / 10, h + 0.48, (z0 + z1) / 2) * CFrame.Angles(math.rad(-2), 0, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, DECO)
 	end
 	-- a lamp under the canopy
-	lampHead(CFrame.new((x0 + x1) / 2, h - 0.5, -30), 28, false)
+	lampHead(CFrame.new((x0 + x1) / 2, h - 0.5, -33), 28, false)
 end
 
 local function upPavement()
 	-- paved path from the back door to the waste area, flower tubs and a bench by the wall
-	box("PavedPath", 2.5, 0.16, -27.2, 26.5, 0.22, -24.2, Color3.fromRGB(160, 128, 108), Enum.Material.Cobblestone, DECO)
-	box("PavedApron", 3, 0.16, -40, 3.6, 0.22, -27.2, Color3.fromRGB(160, 128, 108), Enum.Material.Cobblestone, DECO)
+	box("PavedPath", 2.5, 0.16, -30.2, 26.5, 0.22, -27.2, Color3.fromRGB(160, 128, 108), Enum.Material.Cobblestone, DECO)
+	box("PavedApron", 3, 0.16, -40, 3.6, 0.22, -30.2, Color3.fromRGB(160, 128, 108), Enum.Material.Cobblestone, DECO)
 	for _, x in ipairs({ -9, -2, 3 }) do
 		box("FlowerTub", x - 0.9, 0.15, -23.1, x + 0.9, 1.5, -21.3, Color3.fromRGB(120, 112, 104), Enum.Material.Concrete)
 		box("TubSoil", x - 0.75, 1.5, -22.95, x + 0.75, 1.6, -21.45, Color3.fromRGB(70, 50, 34), Enum.Material.Ground, DECO)

@@ -17,10 +17,10 @@ local FoodPreparationService = require(Services.FoodPreparationService)
 
 local BackDoorService = {}
 
--- opening in WallBack (the storage back wall, z -24 … -23), right of the shelves, left of the right wall
+-- opening in WallBack (the storage back wall, z -27 … -26), right of the shelves, left of the right wall
 local X0, X1 = 26.0, 29.8
 local HEIGHT = 8.4
-local Z_IN, Z_OUT = -23, -24
+local Z_IN, Z_OUT = -26, -27
 local FLOOR_Y = 0.25
 local OPEN_ANGLE = -100 -- degrees around the hinge; negative = swings outward into the yard (-Z)
 local AUTO_CLOSE = 15 -- seconds without anybody close by
