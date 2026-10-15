@@ -255,6 +255,9 @@ Config.Sounds = {
 	cut_slice = { id = "rbxassetid://9113833032", volume = 0.35, pitchVar = 0.18 },
 	knife_draw = { id = "rbxassetid://9113450094", volume = 0.4 },
 	cutter_motor = { id = "rbxassetid://9116980359", volume = 0.35 },
+	-- back door (Creator Store, Dino_B9; loaded and verified in Studio)
+	door_open = { id = "rbxassetid://7309105153", volume = 0.5, pitchVar = 0.05 },
+	door_close = { id = "rbxassetid://7309106429", volume = 0.45, pitchVar = 0.05 },
 }
 
 Config.Achievements = {
