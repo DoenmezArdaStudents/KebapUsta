@@ -6,6 +6,8 @@
 --   preparer – chops fresh vegetables when the bins wilt (BusinessService.Refresh)
 --   cleaner  – walks to every dirt spot and wipes it away (BusinessService.Clean)
 --   manager  – reorders low stock at the supplier terminal and speeds the whole team up
+-- Looks: the work clothes of the role (Shared/CustomerLooks.STAFF via CustomerService.DressStaff),
+-- rolled from the contract seed; the sex matches the employee's name.
 
 local CollectionService = game:GetService("CollectionService")
 local PathfindingService = game:GetService("PathfindingService")
@@ -38,7 +40,7 @@ type Worker = {
 	statusLabel: TextLabel,
 	alive: boolean,
 	working: string?,
-	motors: { [string]: Motor6D },
+	joints: { [string]: { target: any, prop: string } }, -- Motor6D.C0 or AnimationConstraint attachment
 	base: { [string]: CFrame },
 }
 
@@ -181,21 +183,24 @@ local function makeWorker(role: string, e): Worker?
 	if not rig then
 		return nil
 	end
-	local r = Random.new(e.seed or 1)
-	local skins = { Color3.fromRGB(255, 220, 190), Color3.fromRGB(234, 192, 152), Color3.fromRGB(198, 140, 100), Color3.fromRGB(141, 95, 62) }
-	local hairs = { Color3.fromRGB(30, 25, 20), Color3.fromRGB(90, 60, 30), Color3.fromRGB(200, 160, 90) }
-	CustomerService.Dress(rig, {
-		skin = skins[r:NextInteger(1, #skins)],
-		shirt = ROLE_COLORS[role],
-		pants = Color3.fromRGB(35, 35, 40),
-		shoes = Color3.fromRGB(25, 25, 25),
-		hair = hairs[r:NextInteger(1, #hairs)],
-		longHair = r:NextNumber() < 0.4,
-		hat = role == "cutter" or role == "preparer" or role == "cashier",
-		hatColor = role == "cashier" and Color3.fromRGB(200, 40, 40) or Color3.fromRGB(250, 250, 250),
-		glasses = role == "manager",
-		vip = false,
-	})
+	local dressed = CustomerService.DressStaff(rig, role, e.seed or 1, e.name)
+	if not dressed then -- old part-based look (customer assets missing)
+		local r = Random.new(e.seed or 1)
+		local skins = { Color3.fromRGB(255, 220, 190), Color3.fromRGB(234, 192, 152), Color3.fromRGB(198, 140, 100), Color3.fromRGB(141, 95, 62) }
+		local hairs = { Color3.fromRGB(30, 25, 20), Color3.fromRGB(90, 60, 30), Color3.fromRGB(200, 160, 90) }
+		CustomerService.Dress(rig, {
+			skin = skins[r:NextInteger(1, #skins)],
+			shirt = ROLE_COLORS[role],
+			pants = Color3.fromRGB(35, 35, 40),
+			shoes = Color3.fromRGB(25, 25, 25),
+			hair = hairs[r:NextInteger(1, #hairs)],
+			longHair = r:NextNumber() < 0.4,
+			hat = role == "cutter" or role == "preparer" or role == "cashier",
+			hatColor = role == "cashier" and Color3.fromRGB(200, 40, 40) or Color3.fromRGB(250, 250, 250),
+			glasses = role == "manager",
+			vip = false,
+		})
+	end
 	rig.Name = "Staff_" .. role
 	local hum = rig:FindFirstChildOfClass("Humanoid") :: Humanoid
 	local root = rig:FindFirstChild("HumanoidRootPart") :: BasePart
@@ -205,7 +210,7 @@ local function makeWorker(role: string, e): Worker?
 			p.CollisionGroup = "Staff"
 		end
 	end
-	-- apron for the kitchen crew, clipboard for the manager
+	-- old look only: block apron for the kitchen crew
 	local torso = rig:FindFirstChild("UpperTorso") :: BasePart?
 	local lower = rig:FindFirstChild("LowerTorso") :: BasePart?
 	local function attach(name: string, size: Vector3, to: BasePart?, offset: CFrame, color: Color3)
@@ -229,7 +234,7 @@ local function makeWorker(role: string, e): Worker?
 		p:SetAttribute("Accessory", true)
 		p.Parent = rig
 	end
-	if role ~= "manager" then
+	if not dressed and role ~= "manager" then
 		local apron = role == "cleaner" and Color3.fromRGB(40, 70, 130) or Color3.fromRGB(150, 30, 30)
 		attach("Apron", Vector3.new(1.7, 1.4, 0.1), torso, CFrame.new(0, -0.1, -0.52), apron)
 		attach("ApronLow", Vector3.new(1.75, 1.3, 0.1), lower, CFrame.new(0, -0.6, -0.55), apron)
@@ -298,12 +303,17 @@ local function makeWorker(role: string, e): Worker?
 			walk:Stop(0.2)
 		end
 	end)
-	local motors, base = {}, {}
+	local joints, base = {}, {}
 	for _, m in ipairs(rig:GetDescendants()) do
-		if m:IsA("Motor6D") then
-			motors[m.Name] = m
-			base[m.Name] = m:GetAttribute("BaseC0") or m.C0
-			m:SetAttribute("BaseC0", base[m.Name])
+		local target, prop = CustomerService.JointOffset(m)
+		if target and prop then
+			joints[m.Name] = { target = target, prop = prop }
+			local b = m:GetAttribute("BaseC0")
+			if typeof(b) ~= "CFrame" then
+				b = (target :: any)[prop]
+				m:SetAttribute("BaseC0", b)
+			end
+			base[m.Name] = b
 		end
 	end
 	rig:SetAttribute("Staff", role)
@@ -322,7 +332,7 @@ local function makeWorker(role: string, e): Worker?
 		statusLabel = status,
 		alive = true,
 		working = nil,
-		motors = motors,
+		joints = joints,
 		base = base,
 	}
 end
@@ -423,7 +433,8 @@ local function face(w: Worker, target: Vector3)
 	end
 end
 
--- procedural work motion on the arms (the rigs use Motor6D joints)
+-- procedural work motion on the arms (offsets on the joints: Motor6D.C0 or, on current R15 rigs, the
+-- parent attachment of the AnimationConstraint – see CustomerService.JointOffset)
 local POSES = {
 	type = function(t)
 		return { RightShoulder = CFrame.Angles(math.rad(70 + math.sin(t * 14) * 6), 0, 0), LeftShoulder = CFrame.Angles(math.rad(70 + math.cos(t * 13) * 6), 0, 0) }
@@ -451,14 +462,14 @@ local function work(w: Worker, pose: string, seconds: number)
 	while w.alive and os.clock() - t0 < seconds do
 		local t = os.clock() - t0
 		local offs = fn(t)
-		for name, m in pairs(w.motors) do
+		for name, j in pairs(w.joints) do
 			local o = offs[name]
-			m.C0 = o and (w.base[name] * o) or w.base[name]
+			j.target[j.prop] = o and (w.base[name] * o) or w.base[name]
 		end
 		task.wait(0.05)
 	end
-	for name, m in pairs(w.motors) do
-		m.C0 = w.base[name]
+	for name, j in pairs(w.joints) do
+		j.target[j.prop] = w.base[name]
 	end
 	w.working = nil
 end
@@ -686,6 +697,63 @@ function JOBS.preparer(w: Worker)
 	BusinessService.Refresh(worst)
 end
 
+-- through the back door (Server/BackDoorService) into the backyard and back
+local BACK_IN = Vector3.new(27.9, 3.3, -18.2)
+local BACK_OUT = Vector3.new(27.9, 3.2, -23.8)
+local function outside(p: Vector3): boolean
+	return p.Z < -21
+end
+
+local function crossBackDoor(w: Worker, toOutside: boolean): boolean
+	local BackDoorService = require(script.Parent.BackDoorService)
+	local a, b = toOutside and BACK_IN or BACK_OUT, toOutside and BACK_OUT or BACK_IN
+	if not goTo(w, a, 1.4) then
+		return false
+	end
+	BackDoorService.Use()
+	task.wait(0.5)
+	return walkTo(w, b, 1.4)
+end
+
+-- fetch one waste object and throw it into the right container; false = nothing to do
+local function wasteRun(w: Worker): boolean
+	local WasteService = require(script.Parent.WasteService)
+	local u, pos = WasteService.ClaimForWorker(w.root.Position)
+	if not u or not pos then
+		return false
+	end
+	setStatus(w, "🗑️ Holt Müll")
+	if outside(pos) ~= outside(w.root.Position) and not crossBackDoor(w, outside(pos)) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	if not (outside(pos) and walkTo(w, pos, 2) or goTo(w, pos, 2)) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	face(w, pos)
+	work(w, "wipe", 0.6)
+	local bin = WasteService.WorkerPick(u, w.root)
+	if not bin then
+		return true
+	end
+	setStatus(w, "🗑️ Bringt Müll raus")
+	if not outside(w.root.Position) and not crossBackDoor(w, true) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	local stand = WasteService.BinStand(bin)
+	if not walkTo(w, stand, 1.6) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	face(w, stand - Vector3.new(3, 0, 0))
+	WasteService.WorkerDispose(u)
+	work(w, "wipe", 0.5)
+	crossBackDoor(w, false)
+	return true
+end
+
 function JOBS.cleaner(w: Worker)
 	local list = BusinessService.Dirt()
 	local best, bestD = nil, math.huge
@@ -696,6 +764,10 @@ function JOBS.cleaner(w: Worker)
 		end
 	end
 	if not best then
+		-- nothing to wipe: carry waste out to the containers in the backyard (issue #13)
+		if wasteRun(w) then
+			return
+		end
 		setStatus(w, "✓ Alles sauber")
 		goTo(w, Vector3.new(8, 3.3, -11), 2)
 		task.wait(2)

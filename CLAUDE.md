@@ -11,6 +11,23 @@ staff and expansions. UI and dialogue are bilingual (German / English).
 The repo is the source of truth and is synced into Studio with **Rojo**. The whole place
 (code *and* world) can be rebuilt from the repo with `rojo build`.
 
+## ⚠️ WICHTIG: Rojo niemals im Team-Create-Place verbinden
+
+Wenn ihr Rojo im echten Spiel verbindet (also im Team-Create-Place, auf dem wir alle zusammen
+arbeiten), überschreibt ihr den Code von anderen! Stattdessen immer zuerst eine eigene lokale
+Kopie bauen und **dort** arbeiten:
+
+```sh
+rojo build -o KebapUsta.rbxl
+```
+
+`KebapUsta.rbxl` in Studio öffnen, dann `rojo serve` + Rojo-Plugin → **Connect**. Diese Datei ist
+nur für euch, nicht für alle – so stören wir uns nicht gegenseitig.
+
+*(EN: Never connect `rojo serve` to the shared Team Create place – it overwrites other people's
+work. Build a local copy with `rojo build -o KebapUsta.rbxl`, open that in Studio and connect Rojo
+there.)*
+
 ## Getting started (new machine / new team member)
 
 1. Install [Rokit](https://github.com/rojo-rbx/rokit) (installs to `~/.rokit/bin`; make sure that is
@@ -18,13 +35,25 @@ The repo is the source of truth and is synced into Studio with **Rojo**. The who
 2. In the repo: `rokit install` → installs the exact tool versions from `rokit.toml`.
 3. Install the Rojo plugin in Studio (`rojo plugin install` or the Creator Store). The plugin
    version must match the pinned rojo version (7.7.x).
-4. Open the Team Create place in Studio, run `rojo serve` in the repo, open the Rojo plugin →
-   **Connect**. From then on, edits to files sync into Studio live.
+4. Build your own local copy with `rojo build -o KebapUsta.rbxl` and open **that file** in Studio
+   (not the Team Create place – see the warning above). Run `rojo serve` in the repo, open the
+   Rojo plugin → **Connect**. From then on, edits to files sync into Studio live.
 5. Optional: install the VS Code extensions from `.vscode/extensions.json` and run
    `rojo sourcemap -o sourcemap.json` so luau-lsp resolves `require`s.
 
 GitHub: `DoenmezArdaStudents/KebapUsta`, branch `main`. Pushing needs collaborator write access
 (a "Permission denied" on push means the account hasn't been added yet – ask the repo owner).
+
+## Team rules (important)
+
+- **Never `rojo serve` into the shared Team Create place.** Rojo replaces the scripts and assets there
+  and overwrites other people's work. Build your own copy and work in that instead:
+  `rojo build -o KebapUsta.rbxl`, open that file in Studio, then `rojo serve` + Connect.
+- **One branch per issue, no direct commits to `main`.** Name it after the issue
+  (e.g. `feature/12-trash-containers`, `fix/6-cutting-flesh`), push it and open a Pull Request that
+  references the issue (`Closes #12`). `main` only changes through reviewed PRs.
+- Claude sessions follow the same rules: edit files in `src/`/`assets/` on a branch, test in a
+  locally built place, never edit scripts in the Team Create place via MCP.
 
 ## Daily workflow
 
@@ -119,6 +148,16 @@ File naming follows Rojo: `X.server.luau` = Script, `X.client.luau` = LocalScrip
   `.rbxm` over the matching file in `assets/`. One root instance per file (Rojo requirement).
 - **New asset:** export it to `assets/<Service>/<Name>.rbxm` and add a node with `$path` to
   `default.project.json`, otherwise Rojo ignores it (and `rojo build` won't contain it).
+- **MeshParts and live sync:** the Rojo plugin cannot set `MeshPart.MeshId`. MeshParts that Rojo
+  *creates* in Studio (a new asset, or one missing in Studio) arrive without mesh – white boxes in
+  play, also on Accessory handles. `rojo build` files are fine. Fix: put the asset into Studio once
+  with its meshes (*Insert from File…* of the `.rbxm`, or `SerializationService:DeserializeInstancesAsync`
+  via MCP) under the same name and remove Rojo's copy; on later connects Rojo only matches it.
+  After writing a new export of a mapped `.rbxm` while `rojo serve` runs, Rojo may add a second
+  copy of each new MeshPart – keep the original (lower `GetDebugId()`), delete the copy.
+- **Customer / staff looks:** `ServerStorage.CustomerParts` (Blender meshes from `tools/npc`, incl.
+  work clothes) and `ServerStorage.CustomerAccessories` (free Roblox catalog items) – see
+  `tools/npc/README.md`.
 - **Service properties** (Lighting, StarterPlayer, Workspace) are set via `$properties` in
   `default.project.json`. Changing them in Studio is not saved to the repo – update the JSON.
 - Studio also contains an empty `Rojo` ModuleScript directly under `game` (`return { API = nil }`),

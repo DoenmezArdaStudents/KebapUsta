@@ -118,8 +118,12 @@ function BusinessService.Staff(): { [string]: any }
 	return b and b.staff or {}
 end
 
+BusinessService.WastePenaltyHook = nil :: (() -> number)? -- waste lying around, full bins (Server/WasteService)
+BusinessService.CleanHook = nil :: ((BasePart) -> ())?
+
 function BusinessService.Cleanliness(): number
-	return math.clamp(1 - #dirt * 0.075, 0, 1)
+	local waste = BusinessService.WastePenaltyHook and BusinessService.WastePenaltyHook() or 0
+	return math.clamp(1 - #dirt * 0.075 - waste, 0, 1)
 end
 
 function BusinessService.Dirt(): { BasePart }
@@ -308,6 +312,9 @@ function BusinessService.Clean(part: BasePart): boolean
 		return false
 	end
 	table.remove(dirt, i)
+	if BusinessService.CleanHook then
+		pcall(BusinessService.CleanHook, part)
+	end
 	Net.Sound(nil, "wrap", part.Position)
 	part:Destroy()
 	RestaurantService.PushShop()

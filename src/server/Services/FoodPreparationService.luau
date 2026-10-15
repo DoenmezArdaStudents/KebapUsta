@@ -57,10 +57,12 @@ type PrepState = {
 
 local states: { [Player]: PrepState } = {}
 local sauceHolder: { [string]: Player } = {} -- whose hand each dispenser's bottle is in
+local sauceHidden: { [string]: { { part: BasePart, t: number } } } = {} -- the dispenser's parts while its bottle is away
 local grillOwner: { [number]: Player } = {}
 local spits: { [string]: { heat: string, doneness: number, model: Instance? } } = {
-	chicken = { heat = "low", doneness = 0.3 },
-	veal = { heat = "low", doneness = 0.3 },
+	-- the spits are pre-heated before opening: ready to carve, not burnt (issue #6)
+	chicken = { heat = "low", doneness = Config.Prep.StartDoneness },
+	veal = { heat = "low", doneness = Config.Prep.StartDoneness },
 }
 local mealFolder: Folder
 local trayFolder: Folder
@@ -774,20 +776,22 @@ local function setDispenser(id: string, holder: Player?)
 		return
 	end
 	p:SetAttribute("HeldBy", holder and holder.UserId or nil)
-	local unit = p.Parent
-	local parts = (unit and unit:IsA("Model")) and unit:GetDescendants() or { p }
-	for _, d in ipairs(parts) do
-		if d:IsA("BasePart") then
-			if holder then
-				if d:GetAttribute("BaseT") == nil then
-					d:SetAttribute("BaseT", d.Transparency)
-				end
+	-- restore exactly the parts that were hidden, even if one was re-parented meanwhile
+	-- (the sauce level bar of Server/StockDisplayService comes and goes with the stock)
+	for _, h in ipairs(sauceHidden[id] or {}) do
+		h.part.Transparency = h.t
+	end
+	sauceHidden[id] = nil
+	if holder then
+		local hidden = {}
+		local unit = p.Parent
+		for _, d in ipairs((unit and unit:IsA("Model")) and unit:GetDescendants() or { p }) do
+			if d:IsA("BasePart") then
+				table.insert(hidden, { part = d, t = d.Transparency })
 				d.Transparency = 1
-			elseif d:GetAttribute("BaseT") ~= nil then
-				d.Transparency = d:GetAttribute("BaseT")
-				d:SetAttribute("BaseT", nil)
 			end
 		end
+		sauceHidden[id] = hidden
 	end
 end
 
@@ -1689,6 +1693,11 @@ local function simulate(dt: number)
 			rate, cap = Config.Prep.LowHeatRate * burner, Config.Prep.LowHeatCap
 		end
 		if spit.doneness < cap then
+			-- past "perfect" high heat only builds crust slowly, so a spit left on high doesn't burn
+			-- before the first cut (issue #6)
+			if spit.heat == "high" and spit.doneness >= Config.Prep.LowHeatCap then
+				rate *= Config.Prep.HighHeatCrustFactor
+			end
 			spit.doneness = math.min(cap, spit.doneness + rate * dt)
 		elseif spit.heat == "low" and spit.doneness > cap then
 			-- crust slowly settles when heat is reduced

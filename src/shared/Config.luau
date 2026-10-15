@@ -70,6 +70,8 @@ Config.Prep = {
 	HighHeatRate = 0.11,
 	HighHeatCap = 2.6,
 	BurntDoneness = 1.9,
+	StartDoneness = 0.8, -- spits start pre-heated (cuttable, perfect)
+	HighHeatCrustFactor = 0.25, -- high heat above LowHeatCap only browns slowly (~30 s to burnt)
 	ToastPerfectMin = 3,
 	ToastPerfectMax = 8,
 	ToastBurnt = 11,
@@ -197,6 +199,46 @@ Config.Upgrades = {
 		req = { 2, 5 },
 		values = { 2, 3, 4 },
 	},
+	yard_bins = {
+		icon = "🗑️",
+		name = { de = "Größere Mülltonnen", en = "Larger Waste Bins" },
+		desc = { de = "Die Tonnen im Hinterhof fassen 75 % mehr.", en = "The backyard bins hold 75 % more." },
+		prices = { 220 },
+		req = { 2 },
+		values = { 1, 1.75 },
+	},
+	yard_light = {
+		icon = "💡",
+		name = { de = "Hofbeleuchtung", en = "Backyard Lighting" },
+		desc = { de = "Helle Strahler im ganzen Hinterhof.", en = "Bright floodlights all over the backyard." },
+		prices = { 160 },
+		req = { 2 },
+		values = { false, true },
+	},
+	yard_roof = {
+		icon = "⛺",
+		name = { de = "Überdachte Lieferzone", en = "Covered Unloading Area" },
+		desc = { de = "Ein Vordach über der Lieferzone und dem Hintereingang.", en = "A canopy over the unloading area and the back entrance." },
+		prices = { 380 },
+		req = { 3 },
+		values = { false, true },
+	},
+	yard_storage = {
+		icon = "🏗️",
+		name = { de = "Lagerregal im Hof", en = "Backyard Storage Rack" },
+		desc = { de = "Ein zusätzliches Regal mit 8 Plätzen im Hinterhof.", en = "An extra rack with 8 slots in the backyard." },
+		prices = { 450 },
+		req = { 3 },
+		values = { false, true },
+	},
+	yard_pavement = {
+		icon = "🌷",
+		name = { de = "Pflaster & Deko", en = "Pavement & Decoration" },
+		desc = { de = "Neues Pflaster, Blumenkübel und eine Bank für die Pause.", en = "New paving, flower tubs and a bench for breaks." },
+		prices = { 300 },
+		req = { 3 },
+		values = { false, true },
+	},
 	premium = {
 		icon = "⭐",
 		name = { de = "Premium-Zutaten", en = "Premium Ingredients" },
@@ -220,6 +262,21 @@ Config.Upgrades = {
 Config.UpgradeOrder = {
 	"delivery", "toaster", "spit_burner", "storage", "tray",
 	"queue", "decor", "tables", "premium", "lounge",
+	"yard_bins", "yard_light", "yard_roof", "yard_storage", "yard_pavement",
+}
+
+-- Waste & cleanliness (Server/WasteService, issues #12–#14)
+Config.Waste = {
+	BinCap = { general = 8, plastic = 6, organic = 6 }, -- bags / items per outdoor container
+	KitchenCap = 4, -- discarded meals / wiped trash until the kitchen bin's bag is full
+	MaxItems = 14, -- waste objects lying around at most (extra goes straight into the kitchen bin)
+	ScrapsEvery = { 6, 9 }, -- vegetable portions per bowl of scraps
+	PackagingEvery = { 5, 8 }, -- packed meals per piece of plastic packaging
+	PenaltyInside = 0.045, -- cleanliness lost per waste object inside the restaurant
+	PenaltyOutside = 0.015, -- … lying in the backyard
+	PenaltyFullBin = 0.04, -- per full outdoor container
+	PenaltyMax = 0.5,
+	CollectionPrice = 25, -- paid waste collection (garbage truck)
 }
 
 function Config.UpgradeValue(upgrades: { [string]: number }?, id: string): any
@@ -256,6 +313,16 @@ Config.Sounds = {
 	cut_slice = { id = "rbxassetid://9113833032", volume = 0.35, pitchVar = 0.18 },
 	knife_draw = { id = "rbxassetid://9113450094", volume = 0.4 },
 	cutter_motor = { id = "rbxassetid://9116980359", volume = 0.35 },
+	-- back door (Creator Store, Dino_B9; loaded and verified in Studio)
+	door_open = { id = "rbxassetid://7309105153", volume = 0.5, pitchVar = 0.05 },
+	door_close = { id = "rbxassetid://7309106429", volume = 0.45, pitchVar = 0.05 },
+	-- delivery van (Creator Store; loaded and verified in Studio): engine loop, reverse beeper loop,
+	-- air brake, rear cargo doors
+	van_engine = { id = "rbxassetid://132909779540049", volume = 0.35 },
+	van_beep = { id = "rbxassetid://5471337533", volume = 0.35 },
+	van_brake = { id = "rbxassetid://109083794861112", volume = 0.45 },
+	van_door_open = { id = "rbxassetid://9112987710", volume = 0.5 },
+	van_door_close = { id = "rbxassetid://106783007480793", volume = 0.5 },
 }
 
 Config.Achievements = {

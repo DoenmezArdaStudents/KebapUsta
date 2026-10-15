@@ -325,8 +325,12 @@ local function refreshStation(e: Entry)
 	local carry = game:GetService("Players").LocalPlayer:GetAttribute("Carry")
 	if kind == "logi_shelf" or kind == "logi_cold" then
 		prompt.Enabled = carry ~= nil
-	elseif kind == "logi_box" then
+	elseif kind == "logi_box" or kind == "waste_item" then
 		prompt.Enabled = carry == nil
+	elseif kind == "waste_bin" then
+		local waste = type(carry) == "string" and carry:sub(1, 6) == "waste:"
+		prompt.ActionText = waste and (State.lang == "de" and "Einwerfen" or "Throw in") or (State.lang == "de" and "Füllstand" or "Fill level")
+		prompt.HoldDuration = waste and 0.3 or 0
 	elseif carry and (kind == "bread" or kind == "veg" or kind == "cheese" or kind == "sauce" or kind == "drink") then
 		local sid = kind == "veg" and item or kind == "cheese" and "cheese" or (kind == "bread" and item == "box") and "box" or (kind == "bread" and "bread_" or kind == "sauce" and "sauce_" or "drink_") .. tostring(item)
 		prompt.Enabled = sid == carry

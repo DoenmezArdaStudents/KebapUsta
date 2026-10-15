@@ -68,7 +68,7 @@ local function compute(): (number?, string?, Instance?)
 	end
 	if ps.tutorialDone then
 		if finishedShownAt and os.clock() - finishedShownAt < 9 then
-			return 8, "tut_8", station("stock_terminal")
+			return 8, "tut_8", station("laptop")
 		end
 		return nil
 	end
@@ -91,7 +91,7 @@ local function compute(): (number?, string?, Instance?)
 		if hadTicket then
 			return nil
 		end
-		return 1, "tut_1", customerInState("Ordering") or station("laptop")
+		return 1, "tut_1", customerInState("Ordering")
 	end
 	hadTicket = true
 	-- order of work (issue #3): meat into the pan → pan and bread onto the board → fill → close → serve

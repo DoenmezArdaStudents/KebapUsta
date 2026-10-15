@@ -944,6 +944,9 @@ function UI.Init()
 	buildTutorial()
 	buildSleep()
 	Laptop.Init()
+	Laptop.OnBlocked = function()
+		UI.Toast("n_need_office", nil, "warn")
+	end
 	Laptop.OnOpenChanged = function(open)
 		-- the HUD steps aside while the laptop is open
 		gui.Enabled = not open

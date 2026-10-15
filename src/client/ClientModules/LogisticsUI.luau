@@ -56,7 +56,12 @@ function LogisticsUI.Init()
 	local function updateHint()
 		local c = lp:GetAttribute("Carry")
 		hint.Visible = c ~= nil
-		if c then
+		if type(c) == "string" and c:sub(1, 6) == "waste:" then
+			local k = c:sub(7)
+			local de = k == "scraps" and "🥬 Gemüsereste → Bio-Tonne" or k == "packaging" and "🧴 Verpackung → Plastik-Tonne" or k == "cardboard" and "📦 Karton → Restmüll-Tonne" or "🗑️ Müllsack → Restmüll-Tonne"
+			local en = k == "scraps" and "🥬 Scraps → organic bin" or k == "packaging" and "🧴 Packaging → plastic bin" or k == "cardboard" and "📦 Cardboard → general bin" or "🗑️ Garbage bag → general bin"
+			hint.Text = (State.lang == "en" and en or de) .. (State.lang == "en" and "  (backyard, back door)" or "  (Hinterhof, Hintertür)")
+		elseif c then
 			local d = IngredientData.Stock[c]
 			hint.Text = d and d.meat and ("📦 %s – ab in den Kühlraum"):format(name(c)) or ("📦 %s – ins Lagerregal oder zur passenden Station"):format(name(c))
 		end

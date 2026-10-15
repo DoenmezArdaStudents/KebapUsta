@@ -34,6 +34,11 @@ local ColdRoomService = require(Services.ColdRoomService)
 local AdminService = require(Services.AdminService)
 local LogisticsService = require(Services.LogisticsService)
 local HandService = require(Services.HandService)
+local StockDisplayService = require(Services.StockDisplayService)
+local BackDoorService = require(Services.BackDoorService)
+local BackyardService = require(Services.BackyardService)
+local WasteService = require(Services.WasteService)
+local OfficeService = require(Services.OfficeService)
 
 local LobbyService = require(Services.LobbyService)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -63,6 +68,11 @@ local function startGame(hostId: number?)
 	EmployeeService.Init()
 	LogisticsService.Init()
 	HandService.Init()
+	StockDisplayService.Init()
+	BackDoorService.Init()
+	BackyardService.Init()
+	WasteService.Init()
+	OfficeService.Init()
 	AdminService.Init()
 	ReplicatedStorage:SetAttribute("Mode", "game")
 	RestaurantService.ChooseOwner()
@@ -305,6 +315,8 @@ if game:GetService("RunService"):IsStudio() then
 		elseif cmd == "construct" then
 			BusinessService.DebugConstruct(arg)
 			return true
+		elseif cmd == "waste" then
+			return WasteService.Debug(arg and arg.cmd, arg and arg.arg)
 		elseif cmd == "guest" then
 			-- simulate a co-op guest: arg = player index to turn into a guest of player 1
 			local g = Players:GetPlayers()[arg or 2]

@@ -112,6 +112,7 @@ function Net.On(name: string, handler: (Player, ...any) -> ())
 end
 
 local requestHandlers: { [string]: (Player, any) -> any } = {}
+Net.RequestGate = nil :: ((Player, string) -> boolean)?
 function Net.OnRequest(action: string, handler: (Player, any) -> any)
 	requestHandlers[action] = handler
 end
@@ -126,6 +127,10 @@ requestFn.OnServerInvoke = function(player, action, args)
 	local h = requestHandlers[action]
 	if not h then
 		return { ok = false }
+	end
+	-- e.g. management requests only from the office laptop (Server/OfficeService)
+	if Net.RequestGate and not Net.RequestGate(player, action) then
+		return { ok = false, msg = "n_need_office" }
 	end
 	local ok, res = pcall(h, player, args)
 	if not ok then

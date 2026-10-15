@@ -28,6 +28,9 @@ hidden.Parent = ServerStorage
 local shopPushQueued = false
 local ownerChanged = Instance.new("BindableEvent")
 RestaurantService.OwnerChanged = ownerChanged.Event
+-- fires after every (debounced) shop state push, i.e. whenever stock may have changed
+local shopPushed = Instance.new("BindableEvent")
+RestaurantService.ShopPushed = shopPushed.Event
 
 RestaurantService.Clock = Config.Day.StartHour
 RestaurantService.Open = false
@@ -339,6 +342,9 @@ local function track(key: string, model: Instance?)
 	return tracked[key]
 end
 
+-- other services add their own upgrade visuals here (BackyardService, WasteService …)
+RestaurantService.WorldUpgradeHooks = {} :: { ({ [string]: number }) -> () }
+
 function RestaurantService.ApplyWorldUpgrades()
 	local r = restaurant()
 	if not r then
@@ -380,6 +386,12 @@ function RestaurantService.ApplyWorldUpgrades()
 	end
 	if tracked.loungeOff then
 		setVisible(tracked.loungeOff.model, not built, tracked.loungeOff.parent)
+	end
+	for _, hook in ipairs(RestaurantService.WorldUpgradeHooks) do
+		local ok, err = pcall(hook, u)
+		if not ok then
+			warn("[RestaurantService] world upgrade hook:", err)
+		end
 	end
 	RestaurantService.UpdateBoards()
 end
@@ -666,6 +678,7 @@ function RestaurantService.PushShop(player: Player?)
 	task.delay(0.1, function()
 		shopPushQueued = false
 		Net.FireAll("ShopState", RestaurantService.BuildShopState())
+		shopPushed:Fire()
 	end)
 end
 
