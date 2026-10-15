@@ -934,7 +934,8 @@ end
 -- cleanliness + client state
 ---------------------------------------------------------------------------
 local function inside(it: Item): boolean
-	return it.z > -21 -- the restaurant's back wall; everything south of it is the backyard
+	-- the restaurant's back wall (the storage annex x[11,31] reaches to z -24); south of it is the backyard
+	return it.z > ((it.x > 11 and it.x < 31) and -24 or -21)
 end
 
 function WasteService.Penalty(): number

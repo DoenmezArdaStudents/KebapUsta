@@ -417,11 +417,11 @@ local function buildShell(root)
 	end
 	-- kitchen floor (anti-slip steel look)
 	span("KitchenFloor", -30, 0.1, -20, 12, 0.2, -6, Color3.fromRGB(150, 150, 154), Enum.Material.DiamondPlate)
-	span("StorageFloor", 12, 0.1, -20, 30, 0.2, -8, Color3.fromRGB(120, 110, 100), Enum.Material.Concrete)
+	span("StorageFloor", 12, 0.1, -23, 30, 0.2, -8, Color3.fromRGB(120, 110, 100), Enum.Material.Concrete)
 
 	local H = 14
 	-- back & side walls
-	span("WallBack", -31, 0, -21, 31, H, -20, C.wall, Enum.Material.Plaster)
+	span("WallBackKitchen", -31, 0, -21, 12, H, -20, C.wall, Enum.Material.Plaster)
 	span("WallLeft", -31, 0, -20, -30, H, 20.5, C.wall, Enum.Material.Plaster)
 	span("WallRight", 30, 0, -20, 31, H, 20.5, C.wall, Enum.Material.Plaster)
 	-- red wainscot strip on dining walls
@@ -486,8 +486,14 @@ local function buildShell(root)
 	hours.Massless = true
 	current = shell
 
-	-- partition walls: storage room x[12,30] z[-20,-8]; opening in x=12 wall at z[-12.5,-9]
-	span("StorageWallW1", 12, 0, -20, 12.6, H, -12.5, C.wall, Enum.Material.Plaster)
+	-- storage room x[12,30] z[-23,-8]: it reaches 3 studs further back than the kitchen, so the
+	-- cold-room door (Server/ColdRoomService) swings open in front of the shelves, not into them.
+	-- "WallBack" is its back wall (Server/BackDoorService cuts the back door into it).
+	span("WallBack", 11, 0, -24, 31, H, -23, C.wall, Enum.Material.Plaster)
+	span("StorageWallWOut", 11, 0, -23, 12, H, -21, C.wall, Enum.Material.Plaster)
+	span("WallRightBack", 30, 0, -23, 31, H, -20, C.wall, Enum.Material.Plaster)
+	-- partition walls; opening in x=12 wall at z[-12.5,-9]
+	span("StorageWallW1", 12, 0, -23, 12.6, H, -12.5, C.wall, Enum.Material.Plaster)
 	span("StorageWallW2", 12, 0, -9, 12.6, H, -8, C.wall, Enum.Material.Plaster)
 	span("StorageWallW3", 12, 9, -12.5, 12.6, H, -9, C.wall, Enum.Material.Plaster)
 	span("StorageWallN", 12, 0, -8.6, 30, H, -8, C.wall, Enum.Material.Plaster)
@@ -499,6 +505,9 @@ local function buildShell(root)
 	-- upper floors of the building
 	span("UpperFacade", -31, H, 19.5, 31, 40, 20.5, Color3.fromRGB(226, 206, 170), Enum.Material.Plaster)
 	span("UpperBody", -31, H + 0.6, -21, 31, 40, 19.5, Color3.fromRGB(226, 206, 170), Enum.Material.Plaster)
+	-- the deeper storage room sticks out of the back of the building as a flat-roofed annex
+	span("CeilingStorage", 11, H, -24, 31, H + 0.6, -21, Color3.fromRGB(250, 246, 238), Enum.Material.SmoothPlastic)
+	span("StorageRoof", 11, H + 0.6, -24.2, 31, H + 1, -21, Color3.fromRGB(226, 206, 170), Enum.Material.Plaster)
 	span("Cornice", -31.5, 39, 19.4, 31.5, 40.4, 21.2, C.white, Enum.Material.Plaster)
 	for floor = 0, 2 do
 		for wx = -26, 22, 8 do
@@ -1044,13 +1053,13 @@ local function buildStorage(root)
 	current = storage
 	-- shelving with boxes
 	for i, x in ipairs({ 15, 21 }) do
-		span("ShelfFrame", x, 0.2, -19.8, x + 5, 9, -18, C.darkSteel, Enum.Material.Metal, { Transparency = 0.9 })
+		span("ShelfFrame", x, 0.2, -22.8, x + 5, 9, -21, C.darkSteel, Enum.Material.Metal, { Transparency = 0.9 })
 		for level = 0, 3 do
 			local y = 0.6 + level * 2.3
-			span("ShelfBoard", x, y, -19.8, x + 5, y + 0.2, -18, C.steel, Enum.Material.Metal)
+			span("ShelfBoard", x, y, -22.8, x + 5, y + 0.2, -21, C.steel, Enum.Material.Metal)
 			for b = 0, 2 do
 				local col = ({ Color3.fromRGB(180, 140, 90), Color3.fromRGB(160, 120, 80), Color3.fromRGB(200, 170, 120) })[((b + level + i) % 3) + 1]
-				part("Box", Vector3.new(1.4, 1.4, 1.4), at(x + 0.9 + b * 1.6, y + 0.9, -18.9), col, Enum.Material.Cardboard)
+				part("Box", Vector3.new(1.4, 1.4, 1.4), at(x + 0.9 + b * 1.6, y + 0.9, -21.9), col, Enum.Material.Cardboard)
 			end
 		end
 	end
@@ -1070,7 +1079,7 @@ local function buildStorage(root)
 	local drop = span("DeliveryArea", 13, 0.2, -16, 18, 0.25, -12.8, Color3.fromRGB(230, 200, 40), Enum.Material.SmoothPlastic, { CanCollide = false })
 	drop.Transparency = 0.5
 	-- storage light
-	local sl = part("StorageLamp", Vector3.new(4, 0.2, 1), at(21, 13.8, -14), C.white, Enum.Material.Neon)
+	local sl = part("StorageLamp", Vector3.new(4, 0.2, 1), at(21, 13.8, -15.5), C.white, Enum.Material.Neon)
 	light(sl, 22, 1.1, Color3.fromRGB(240, 245, 255), "spot")
 end
 

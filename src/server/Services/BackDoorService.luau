@@ -17,10 +17,10 @@ local FoodPreparationService = require(Services.FoodPreparationService)
 
 local BackDoorService = {}
 
--- opening in WallBack (z -21 … -20), right of the storage shelves, left of the right wall
+-- opening in WallBack (the storage back wall, z -24 … -23), right of the shelves, left of the right wall
 local X0, X1 = 26.0, 29.8
 local HEIGHT = 8.4
-local Z_IN, Z_OUT = -20, -21
+local Z_IN, Z_OUT = -23, -24
 local FLOOR_Y = 0.25
 local OPEN_ANGLE = -100 -- degrees around the hinge; negative = swings outward into the yard (-Z)
 local AUTO_CLOSE = 15 -- seconds without anybody close by
@@ -175,8 +175,8 @@ local function build()
 	-- outside: concrete landing with a step and a wall lamp (the backyard continues from here)
 	local yard = Instance.new("Model")
 	yard.Name = "BackLanding"
-	part(yard, "Landing", Vector3.new(12, 0.4, 6), CFrame.new(midX, FLOOR_Y - 0.2, Z_OUT - 3), Color3.fromRGB(150, 148, 142), Enum.Material.Concrete)
-	part(yard, "Step", Vector3.new(6, 0.2, 1.2), CFrame.new(midX, 0.0, Z_OUT - 6.6), Color3.fromRGB(140, 138, 132), Enum.Material.Concrete)
+	part(yard, "Landing", Vector3.new(12, 0.4, 3), CFrame.new(midX, FLOOR_Y - 0.2, Z_OUT - 1.5), Color3.fromRGB(150, 148, 142), Enum.Material.Concrete)
+	part(yard, "Step", Vector3.new(6, 0.2, 1.2), CFrame.new(midX, 0.0, Z_OUT - 3.6), Color3.fromRGB(140, 138, 132), Enum.Material.Concrete)
 	local lamp = part(yard, "WallLamp", Vector3.new(0.9, 0.5, 0.5), CFrame.new(midX, FLOOR_Y + HEIGHT + 0.9, Z_OUT - 0.3), Color3.fromRGB(40, 40, 44), Enum.Material.Metal)
 	local glow = part(yard, "LampGlass", Vector3.new(0.7, 0.18, 0.4), lamp.CFrame * CFrame.new(0, -0.3, 0), Color3.fromRGB(255, 236, 190), Enum.Material.Neon, { CanCollide = false })
 	local light = Instance.new("SpotLight")

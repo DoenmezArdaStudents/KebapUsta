@@ -706,10 +706,11 @@ function JOBS.preparer(w: Worker)
 end
 
 -- through the back door (Server/BackDoorService) into the backyard and back
-local BACK_IN = Vector3.new(27.9, 3.3, -18.2)
-local BACK_OUT = Vector3.new(27.9, 3.2, -23.8)
+local BACK_IN = Vector3.new(27.9, 3.3, -21.2)
+local BACK_OUT = Vector3.new(27.9, 3.2, -26.8)
 local function outside(p: Vector3): boolean
-	return p.Z < -21
+	-- the back wall is at z -21, the storage annex x[11,31] reaches down to z -24
+	return p.Z < ((p.X > 11 and p.X < 31) and -24 or -21)
 end
 
 local function crossBackDoor(w: Worker, toOutside: boolean): boolean

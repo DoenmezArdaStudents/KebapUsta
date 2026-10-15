@@ -29,7 +29,7 @@ LogisticsService.HandsBusyHook = nil :: ((Player) -> boolean)?
 -- parked van's rear doors and the building, then a second row on the landing at the back door
 local UNLOAD_ROWS = { { x = 22.6, z = -29.1, y = 0.15 }, { x = 22.6, z = -25.4, y = 0.25 } }
 local SHELVES = { { x = 17.5, group = 1 }, { x = 23.5, group = 2 } }
-local SHELF_Z = -18.9
+local SHELF_Z = -21.9
 local BOARD_Y = { 0.8, 3.1, 5.4, 7.7 }
 local COLD_DROP = Vector3.new(35, 3.5, -12.6)
 local BOX_SIZE = Vector3.new(2, 1.4, 1.6)
