@@ -3,7 +3,8 @@
 --   · concrete apron along the building, asphalt yard, a back street with sidewalk behind it
 --   · brick walls with concrete caps, a chain-link fence section and a wide vehicle gate
 --   · a marked delivery unloading area in front of the back door (room for a van to turn in and park)
---   · a separate, walled waste disposal area (bins come with #12)
+--   · a separate, walled waste disposal area (containers: Server/WasteService)
+--   · purchasable upgrades (lighting, canopy, pavement; rack via LogisticsService): ApplyUpgrades
 --   · street lights, wall lamps, drainage grates, puddles, pallets, crates, pipes, AC units, plants
 -- Blender props (ServerStorage.Models.Backyard: Pallet, Crate, ACUnit, LampHead – see art/backyard)
 -- replace the primitive versions when they exist. Decoration does not collide or cast small shadows,
@@ -338,9 +339,102 @@ local function plants()
 	end
 end
 
+---------------------------------------------------------------------------
+-- purchasable upgrades (#14, Config.Upgrades yard_*): rebuilt whenever the upgrades change
+---------------------------------------------------------------------------
+local function upLights()
+	for _, p in ipairs({ Vector3.new(6, 0, -31), Vector3.new(16, 0, -45), Vector3.new(38, 0, -44), Vector3.new(-6, 0, -26) }) do
+		part("FloodPole", Vector3.new(0.4, 11, 0.4), CFrame.new(p.X, 5.5, p.Z), C.darkMetal, Enum.Material.Metal)
+		part("FloodBase", Vector3.new(1.1, 0.4, 1.1), CFrame.new(p.X, 0.35, p.Z), C.concrete, Enum.Material.Concrete)
+		for _, a in ipairs({ 0, math.pi }) do
+			local cf = CFrame.new(p.X, 11.2, p.Z) * CFrame.Angles(0, a + 0.6, 0) * CFrame.new(0, 0, -0.6) * CFrame.Angles(math.rad(-25), 0, 0)
+			lampHead(cf, 42, false)
+		end
+	end
+end
+
+local function upRoof()
+	-- canopy over the unloading area and the back entrance; high enough for the delivery van
+	local x0, x1, z0, z1, h = 19.4, 36.6, -43.5, -21.2, 9.8
+	for _, x in ipairs({ x0 + 0.3, x1 - 0.3 }) do
+		for _, z in ipairs({ z0 + 0.3, (z0 + z1) / 2 }) do
+			part("CanopyPost", Vector3.new(0.45, h, 0.45), CFrame.new(x, h / 2, z), C.darkMetal, Enum.Material.Metal)
+		end
+		part("CanopyBeam", Vector3.new(0.4, 0.5, z1 - z0), CFrame.new(x, h - 0.1, (z0 + z1) / 2), C.darkMetal, Enum.Material.Metal)
+	end
+	local roof = part("CanopyRoof", Vector3.new(x1 - x0 + 0.6, 0.18, z1 - z0 + 0.4), CFrame.new((x0 + x1) / 2, h + 0.35, (z0 + z1) / 2) * CFrame.Angles(math.rad(-2), 0, 0), Color3.fromRGB(150, 154, 160), Enum.Material.CorrodedMetal, { CastShadow = true })
+	roof.Reflectance = 0.05
+	for i = 0, 10 do
+		part("CanopyRib", Vector3.new(0.12, 0.12, z1 - z0 + 0.4), CFrame.new(x0 + i * (x1 - x0) / 10, h + 0.48, (z0 + z1) / 2) * CFrame.Angles(math.rad(-2), 0, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, DECO)
+	end
+	-- a lamp under the canopy
+	lampHead(CFrame.new((x0 + x1) / 2, h - 0.5, -30), 28, false)
+end
+
+local function upPavement()
+	-- paved path from the back door to the waste area, flower tubs and a bench by the wall
+	box("PavedPath", 2.5, 0.16, -27.2, 26.5, 0.22, -23.4, Color3.fromRGB(160, 128, 108), Enum.Material.Cobblestone, DECO)
+	box("PavedApron", 3, 0.16, -40, 3.6, 0.22, -27.2, Color3.fromRGB(160, 128, 108), Enum.Material.Cobblestone, DECO)
+	for _, x in ipairs({ -2, 5, 19 }) do
+		box("FlowerTub", x - 0.9, 0.15, -23.1, x + 0.9, 1.5, -21.3, Color3.fromRGB(120, 112, 104), Enum.Material.Concrete)
+		box("TubSoil", x - 0.75, 1.5, -22.95, x + 0.75, 1.6, -21.45, Color3.fromRGB(70, 50, 34), Enum.Material.Ground, DECO)
+		for k = 0, 4 do
+			local a = k * 1.3
+			part("Flower", Vector3.new(0.45, 0.45, 0.45), CFrame.new(x + math.cos(a) * 0.45, 1.85 + (k % 2) * 0.15, -22.2 + math.sin(a) * 0.4), k % 2 == 0 and Color3.fromRGB(230, 70, 90) or Color3.fromRGB(250, 200, 60), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, CanCollide = false, CanQuery = false, CastShadow = false })
+		end
+		part("Leaves", Vector3.new(1.4, 0.5, 1.3), CFrame.new(x, 1.75, -22.2), C.green, Enum.Material.Grass, DECO)
+	end
+	-- bench for the break
+	local bx, bz = 12, -22.6
+	box("BenchSeat", bx - 2.2, 1.5, bz - 0.7, bx + 2.2, 1.7, bz + 0.5, C.wood, Enum.Material.Wood)
+	box("BenchBack", bx - 2.2, 1.7, bz + 0.35, bx + 2.2, 3.2, bz + 0.55, C.wood, Enum.Material.Wood)
+	for _, x in ipairs({ bx - 1.9, bx + 1.9 }) do
+		box("BenchLeg", x - 0.12, 0.15, bz - 0.6, x + 0.12, 1.5, bz + 0.4, C.darkMetal, Enum.Material.Metal)
+	end
+end
+
+local UPGRADES = { yard_light = upLights, yard_roof = upRoof, yard_pavement = upPavement }
+
+function BackyardService.ApplyUpgrades(u: { [string]: number })
+	local r = workspace:FindFirstChild("Restaurant")
+	local yard = r and r:FindFirstChild("Backyard")
+	if not yard then
+		return
+	end
+	local saved = root
+	for id, build in pairs(UPGRADES) do
+		local name = "Upgrade_" .. id
+		local have = yard:FindFirstChild(name)
+		local want = (u[id] or 0) >= 1
+		if want and not have then
+			local m = Instance.new("Model")
+			m.Name = name
+			root = m
+			local ok, err = pcall(build)
+			if not ok then
+				warn("[BackyardService] " .. id .. ": " .. tostring(err))
+			end
+			m.Parent = yard
+		elseif have and not want then
+			have:Destroy()
+		end
+	end
+	root = saved
+	if (u.yard_storage or 0) >= 1 then
+		local LogisticsService = require(script.Parent.LogisticsService)
+		LogisticsService.AddYardShelf()
+	end
+end
+
 function BackyardService.Init()
 	local r = workspace:FindFirstChild("Restaurant")
-	if not r or r:FindFirstChild("Backyard") then
+	if not r then
+		return
+	end
+	local RestaurantService = require(script.Parent.RestaurantService)
+	table.insert(RestaurantService.WorldUpgradeHooks, BackyardService.ApplyUpgrades)
+	if r:FindFirstChild("Backyard") then
+		BackyardService.ApplyUpgrades(RestaurantService.GetUpgrades())
 		return
 	end
 	root = Instance.new("Model")
@@ -353,6 +447,7 @@ function BackyardService.Init()
 		end
 	end
 	root.Parent = r
+	BackyardService.ApplyUpgrades(RestaurantService.GetUpgrades())
 end
 
 return BackyardService
