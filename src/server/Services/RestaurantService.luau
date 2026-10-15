@@ -28,6 +28,9 @@ hidden.Parent = ServerStorage
 local shopPushQueued = false
 local ownerChanged = Instance.new("BindableEvent")
 RestaurantService.OwnerChanged = ownerChanged.Event
+-- fires after every (debounced) shop state push, i.e. whenever stock may have changed
+local shopPushed = Instance.new("BindableEvent")
+RestaurantService.ShopPushed = shopPushed.Event
 
 RestaurantService.Clock = Config.Day.StartHour
 RestaurantService.Open = false
@@ -675,6 +678,7 @@ function RestaurantService.PushShop(player: Player?)
 	task.delay(0.1, function()
 		shopPushQueued = false
 		Net.FireAll("ShopState", RestaurantService.BuildShopState())
+		shopPushed:Fire()
 	end)
 end
 
