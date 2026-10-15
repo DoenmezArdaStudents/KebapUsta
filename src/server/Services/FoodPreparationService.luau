@@ -31,8 +31,9 @@ local states: { [Player]: PrepState } = {}
 local boardOwner: { [number]: Player } = {}
 local grillOwner: { [number]: Player } = {}
 local spits: { [string]: { heat: string, doneness: number, model: Instance? } } = {
-	chicken = { heat = "low", doneness = 0.3 },
-	veal = { heat = "low", doneness = 0.3 },
+	-- the spits are pre-heated before opening: ready to carve, not burnt (issue #6)
+	chicken = { heat = "low", doneness = Config.Prep.StartDoneness },
+	veal = { heat = "low", doneness = Config.Prep.StartDoneness },
 }
 local mealFolder: Folder
 local trayFolder: Folder
@@ -974,6 +975,11 @@ local function simulate(dt: number)
 			rate, cap = Config.Prep.LowHeatRate * burner, Config.Prep.LowHeatCap
 		end
 		if spit.doneness < cap then
+			-- past "perfect" high heat only builds crust slowly, so a spit left on high doesn't burn
+			-- before the first cut (issue #6)
+			if spit.heat == "high" and spit.doneness >= Config.Prep.LowHeatCap then
+				rate *= Config.Prep.HighHeatCrustFactor
+			end
 			spit.doneness = math.min(cap, spit.doneness + rate * dt)
 		elseif spit.heat == "low" and spit.doneness > cap then
 			-- crust slowly settles when heat is reduced

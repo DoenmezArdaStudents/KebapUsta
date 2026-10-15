@@ -694,6 +694,63 @@ function JOBS.preparer(w: Worker)
 	BusinessService.Refresh(worst)
 end
 
+-- through the back door (Server/BackDoorService) into the backyard and back
+local BACK_IN = Vector3.new(27.9, 3.3, -18.2)
+local BACK_OUT = Vector3.new(27.9, 3.2, -23.8)
+local function outside(p: Vector3): boolean
+	return p.Z < -21
+end
+
+local function crossBackDoor(w: Worker, toOutside: boolean): boolean
+	local BackDoorService = require(script.Parent.BackDoorService)
+	local a, b = toOutside and BACK_IN or BACK_OUT, toOutside and BACK_OUT or BACK_IN
+	if not goTo(w, a, 1.4) then
+		return false
+	end
+	BackDoorService.Use()
+	task.wait(0.5)
+	return walkTo(w, b, 1.4)
+end
+
+-- fetch one waste object and throw it into the right container; false = nothing to do
+local function wasteRun(w: Worker): boolean
+	local WasteService = require(script.Parent.WasteService)
+	local u, pos = WasteService.ClaimForWorker(w.root.Position)
+	if not u or not pos then
+		return false
+	end
+	setStatus(w, "🗑️ Holt Müll")
+	if outside(pos) ~= outside(w.root.Position) and not crossBackDoor(w, outside(pos)) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	if not (outside(pos) and walkTo(w, pos, 2) or goTo(w, pos, 2)) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	face(w, pos)
+	work(w, "wipe", 0.6)
+	local bin = WasteService.WorkerPick(u, w.root)
+	if not bin then
+		return true
+	end
+	setStatus(w, "🗑️ Bringt Müll raus")
+	if not outside(w.root.Position) and not crossBackDoor(w, true) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	local stand = WasteService.BinStand(bin)
+	if not walkTo(w, stand, 1.6) then
+		WasteService.WorkerAbort(u)
+		return true
+	end
+	face(w, stand - Vector3.new(3, 0, 0))
+	WasteService.WorkerDispose(u)
+	work(w, "wipe", 0.5)
+	crossBackDoor(w, false)
+	return true
+end
+
 function JOBS.cleaner(w: Worker)
 	local list = BusinessService.Dirt()
 	local best, bestD = nil, math.huge
@@ -704,6 +761,10 @@ function JOBS.cleaner(w: Worker)
 		end
 	end
 	if not best then
+		-- nothing to wipe: carry waste out to the containers in the backyard (issue #13)
+		if wasteRun(w) then
+			return
+		end
 		setStatus(w, "✓ Alles sauber")
 		goTo(w, Vector3.new(8, 3.3, -11), 2)
 		task.wait(2)
