@@ -251,7 +251,7 @@ local S = {
 	-- tutorial
 	tut_title = { de = "Tutorial", en = "Tutorial" },
 	tut_skip = { de = "Überspringen", en = "Skip" },
-	tut_1 = { de = "Willkommen in deinem Kebap-Laden! Ein Kunde kommt gleich zur Kassa. Geh hinter die Theke und nimm seine Bestellung auf – [F] beim Kunden oder an der Kassa.", en = "Welcome to your kebab shop! A customer is coming to the register. Go behind the counter and take their order – [F] at the customer or at the register." },
+	tut_1 = { de = "Willkommen in deinem Kebap-Laden! Ein Kunde kommt gleich zur Kassa. Geh hinter die Theke und nimm seine Bestellung auf – [F] beim Kunden.", en = "Welcome to your kebab shop! A customer is coming to the register. Go behind the counter and take their order – [F] at the customer." },
 	tut_2 = { de = "Die Bestellung steht jetzt unten in der Zutatenliste. Nimm ein Kebap-Brot aus der Brotstation hinten.", en = "The order is now in the ingredient list below. Take a kebab bread from the bread station at the back." },
 	tut_3 = { de = "Geh zum Hühnerspieß und drück [E]. Schneide im Takt (Klick / Leertaste) – im grünen Bereich wird das Fleisch am besten. Das Ticket zeigt, wie viele Portionen nötig sind. [E] = fertig.", en = "Go to the chicken spit and press [E]. Cut in rhythm (click / space) – the green zone gives the best meat. The ticket shows how many portions are needed. [E] = done." },
 	tut_4 = { de = "Füge Gemüse aus der Kühltheke und Saucen aus den Spendern hinzu. Grüne Häkchen zeigen, was schon passt.", en = "Add vegetables from the cold counter and sauces from the dispensers. Green ticks show what's already right." },

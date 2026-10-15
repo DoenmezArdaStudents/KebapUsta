@@ -4,7 +4,6 @@
 --   · a door opening in WallLeft (kitchen side, z -11.4 … -7.6) with a swinging wooden door
 --     (tag "SwingDoor", Client/Doors; station "office_door", closes on its own)
 --   · the laptop model from the counter (Restaurant.Kitchen.Laptop) moves onto the office desk
---   · a cash register takes its place on the counter (station "register": take the order)
 --   · the stock terminal and the upgrade board in the storage room are removed – the laptop apps
 --     (supplier, shop upgrades) replace them
 --   · desk, chair, lamp, shelves with binders, file cabinet, safe, framed pictures, clock,
@@ -535,28 +534,6 @@ end
 ---------------------------------------------------------------------------
 -- laptop & storage clean-up
 ---------------------------------------------------------------------------
--- where the laptop stood on the counter there is now a cash register: [E] takes the waiting
--- customer's order (station "register", Server/CustomerService)
-local function buildRegister(r: Instance, at: CFrame)
-	local m = Instance.new("Model")
-	m.Name = "Register"
-	local saved = root
-	root = m :: any
-	local base = at * CFrame.new(0, 0.18, 0)
-	part("RegisterBase", Vector3.new(1.8, 0.36, 1.6), base, C.black, Enum.Material.SmoothPlastic)
-	part("CashDrawer", Vector3.new(1.7, 0.08, 0.05), base * CFrame.new(0, 0, -0.82), Color3.fromRGB(60, 60, 66), Enum.Material.Metal, DECO)
-	part("Stand", Vector3.new(0.18, 0.7, 0.18), base * CFrame.new(0, 0.5, 0.3), C.metal, Enum.Material.Metal, DECO)
-	local screen = part("RegisterDisplay", Vector3.new(1.5, 1.0, 0.08), base * CFrame.new(0, 1.05, 0.25) * CFrame.Angles(math.rad(-18), 0, 0), C.black, Enum.Material.SmoothPlastic)
-	text(screen, Enum.NormalId.Front, "🧾 KASSA", Color3.fromRGB(120, 230, 150), Color3.fromRGB(16, 24, 22), Enum.Font.GothamBlack)
-	part("Keypad", Vector3.new(0.9, 0.05, 0.6), base * CFrame.new(0.25, 0.2, -0.35) * CFrame.Angles(math.rad(10), 0, 0), Color3.fromRGB(80, 80, 88), Enum.Material.SmoothPlastic, DECO)
-	local point = part("RegisterPoint", Vector3.new(2.6, 2, 2.2), base * CFrame.new(0, 0.8, -0.2), C.white, nil, { Transparency = 1, CanCollide = false })
-	point:SetAttribute("Station", "register")
-	CollectionService:AddTag(point, "Station")
-	root = saved
-	local kitchen = r:FindFirstChild("Kitchen")
-	m.Parent = kitchen or r
-end
-
 local function moveLaptop(r: Instance)
 	local kitchen = r:FindFirstChild("Kitchen")
 	local laptop = kitchen and kitchen:FindFirstChild("Laptop") :: Model?
@@ -569,13 +546,6 @@ local function moveLaptop(r: Instance)
 	end
 	local base = laptop:FindFirstChild("Base") :: BasePart?
 	if base then
-		-- a cash register takes the laptop's place on the counter
-		-- (world-aligned: the display and the cash drawer face the kitchen, -Z)
-		local spot = CFrame.new(base.Position - Vector3.new(0, base.Size.Y / 2 + 0.05, 0))
-		local okReg, errReg = pcall(buildRegister, r, spot)
-		if not okReg then
-			warn("[OfficeService] register: " .. tostring(errReg))
-		end
 		local rel = base.CFrame:Inverse() * laptop:GetPivot()
 		-- the screen faced -Z at the counter; on the desk it faces the chair (+X)
 		local target = CFrame.new(DESK_X + 0.1, DESK_TOP + 0.145, DESK_Z) * CFrame.Angles(0, -math.pi / 2, 0) * base.CFrame.Rotation

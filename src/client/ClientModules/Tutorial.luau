@@ -69,7 +69,7 @@ local function compute(): (number?, string?, Instance?)
 		if hadTicket then
 			return nil
 		end
-		return 1, "tut_1", customerInState("Ordering") or station("register")
+		return 1, "tut_1", customerInState("Ordering")
 	end
 	hadTicket = true
 	if not meal then
