@@ -41,6 +41,7 @@ Interaction.OpenPanel = UI.OpenPanel
 require(Modules.AdminUI).Init()
 require(Modules.LogisticsUI).Init()
 require(Modules.HandUI).Init()
+require(Modules.Doors).Init()
 PromptUI.Init()
 Interaction.Init()
 Bubbles.Init()
