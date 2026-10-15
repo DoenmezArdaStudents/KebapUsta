@@ -1,0 +1,14 @@
+{
+	"name": "KebapUsta-CustomerPreview",
+	"tree": {
+		"$className": "DataModel",
+		"ServerStorage": {
+			"$className": "ServerStorage",
+			"CustomerPreviewData": {
+				"$className": "Folder",
+				"Data": { "$path": "out/studio/data" },
+				"Manifest": { "$path": "out/studio/Manifest.json" }
+			}
+		}
+	}
+}

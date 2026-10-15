@@ -12,3 +12,10 @@ sourcemap.json
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Blender build output (tools/blender/build.py)
+tools/blender/out/
+__pycache__/
+
+# NPC builder output (tools/npc/npc_builder.py)
+tools/npc/out/

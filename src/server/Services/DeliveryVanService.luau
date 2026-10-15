@@ -208,7 +208,15 @@ local function newDriver(look: { [string]: any }?, name: string?): (Model?, Huma
 	if not ok or not rig then
 		return nil
 	end
-	pcall(CustomerService.Dress, rig, look or DRIVER_LOOK)
+	-- supplier's work clothes (Shared/CustomerLooks.STAFF.driver), a different person every delivery
+	local dressed = false
+	if not look and CustomerService.DressStaff then
+		local ok2, res = pcall(CustomerService.DressStaff, rig, "driver", math.random(1, 2 ^ 30))
+		dressed = ok2 and res == true
+	end
+	if not dressed then
+		pcall(CustomerService.Dress, rig, look or DRIVER_LOOK)
+	end
 	rig.Name = name or "DeliveryDriver"
 	local hum = rig:FindFirstChildOfClass("Humanoid")
 	if not hum then

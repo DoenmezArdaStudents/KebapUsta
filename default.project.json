@@ -16,6 +16,12 @@
 		"ServerStorage": {
 			"Models": {
 				"$path": "assets/ServerStorage/Models.rbxm"
+			},
+			"CustomerParts": {
+				"$path": "assets/ServerStorage/CustomerParts.rbxm"
+			},
+			"CustomerAccessories": {
+				"$path": "assets/ServerStorage/CustomerAccessories.rbxm"
 			}
 		},
 
