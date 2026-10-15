@@ -40,5 +40,6 @@ Place files are gitignored – the repo is the source of truth.
 | `src/shared`  | ReplicatedStorage.Shared                 |
 | `src/client`  | StarterPlayer.StarterPlayerScripts       |
 | `assets/`     | Models (.rbxm) for Workspace, ServerStorage, StarterCharacter, Lighting, TextChatService |
+| `art/`        | Blender sources (not synced): `food/` (bread, veg, meat, sauces) and `logistics/` (van, boxes, crates, cooler, shelf, meat cone). `python3 make_textures.py && python3 build_*.py` (needs `pip install bpy`) writes the FBX to `out/`; import it in Studio via 3D Importer into `ServerStorage.Models` |
 
 See [CLAUDE.md](CLAUDE.md) for architecture and conventions.

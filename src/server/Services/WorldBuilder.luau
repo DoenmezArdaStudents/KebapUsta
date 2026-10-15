@@ -764,15 +764,15 @@ local function buildKitchen(root, stations)
 	ramp("DeckRampFront", Vector3.new(12.6, DECK, 1.2), at(-21.5, 0.2 + DECK / 2, -12.0) * CFrame.Angles(0, math.rad(180), 0))
 	ramp("DeckRampSide", Vector3.new(3.25, DECK, 1.2), at(-14.6, 0.2 + DECK / 2, -14.225) * CFrame.Angles(0, math.rad(-90), 0))
 
-	-- bread station: three bins on back counter
-	local breads = { { "classic", -14.2, Color3.fromRGB(222, 184, 120) }, { "duerum", -12.4, Color3.fromRGB(236, 214, 164) }, { "box", -10.6, C.white } }
+	-- bread station: three big crates on back counter, between the veal spit and the contact grill
+	local breads = { { "classic", -15.45, Color3.fromRGB(222, 184, 120) }, { "duerum", -13.0, Color3.fromRGB(236, 214, 164) }, { "box", -10.55, C.white } }
 	for _, b in ipairs(breads) do
 		local unit = folder("BreadUnit_" .. b[1], kitchen)
 		if BREAD_UNLOCK[b[1]] then
 			unlockable(unit, BREAD_UNLOCK[b[1]])
 		end
 		current = unit
-		local bin = part("BreadBin_" .. b[1], Vector3.new(1.6, 0.9, 2.2), at(b[2], TOP + 0.45, -17.6), C.wood, Enum.Material.WoodPlanks)
+		local bin = part("BreadBin_" .. b[1], Vector3.new(2.3, 1.1, 3.2), at(b[2], TOP + 0.55, -17.6), C.wood, Enum.Material.WoodPlanks)
 		station(bin, "bread", b[1])
 		for k = 0, 2 do
 			if b[1] == "box" then
@@ -783,7 +783,7 @@ local function buildKitchen(root, stations)
 				part("Bread", Vector3.new(1.3, 0.5, 0.9), at(b[2], TOP + 1.1 + k * 0.4, -17.6 - 0.4 + k * 0.4), b[3], Enum.Material.Sand, { CanCollide = false })
 			end
 		end
-		local label = part("Label", Vector3.new(1.5, 0.35, 0.05), at(b[2], TOP + 0.45, -16.48), C.black, nil, { CanCollide = false })
+		local label = part("Label", Vector3.new(1.5, 0.35, 0.05), at(b[2], TOP + 0.65, -15.98), C.black, nil, { CanCollide = false })
 		surfaceText(label, Enum.NormalId.Back, b[1] == "classic" and "BROT" or (b[1] == "duerum" and "DÜRÜM" or "BOX"), C.white)
 		current = kitchen
 	end

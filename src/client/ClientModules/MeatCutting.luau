@@ -1,7 +1,7 @@
 -- Meat carving at the rotating spit (client side).
 --
 --  * Cutting mode (local player): the cook steps up to the spit, the camera moves over the right
---    shoulder, movement is frozen and every prompt is hidden. [Click] / [Space] / [R2] / the touch
+--    shoulder, movement is frozen and every prompt is hidden. [Click] / [Right-click] / [Space] / [R2] / the touch
 --    button makes one knife stroke; the electric cutter runs while the button is held. [E] /
 --    [Backspace] / [B] / "Fertig" ends cutting. A rhythm bar shows the knife's ideal stroke timing.
 --  * Body animation (every client, every cook): the R15 joints (waist, neck, both shoulders, elbows,
@@ -379,6 +379,7 @@ end
 type Session = { meat: string, knife: string, interval: number, window: number, slices: number, auto: boolean, part: BasePart }
 local session: Session? = nil
 local lastPress = 0
+local startedAt = 0
 local holding = false
 local gui: ScreenGui
 local refs: { [string]: any } = {}
@@ -395,7 +396,7 @@ local RATING = {
 	perfect = { de = "PERFEKT!", en = "PERFECT!", color = T.green },
 	fast = { de = "ZU HASTIG", en = "TOO HASTY", color = T.red },
 	slow = { de = "ZU LANGSAM", en = "TOO SLOW", color = T.orange },
-	start = { de = "GUTER ANSATZ", en = "GOOD START", color = T.text },
+	start = { de = "GUTER ANSATZ", en = "GOOD START", color = T.green },
 	electric = { de = "SAUBER", en = "CLEAN", color = T.blue },
 }
 
@@ -506,6 +507,10 @@ local function doStroke()
 		return
 	end
 	local now = os.clock()
+	-- the click / key that opened the cutting mode must not count as a (rushed) first stroke (issue #6)
+	if now - startedAt < 0.3 then
+		return
+	end
 	-- the client never fires faster than the knife can cut (the server enforces it anyway)
 	local minGap = s.auto and s.interval * 0.75 or s.interval * 0.47
 	if now - lastPress < minGap then
@@ -617,6 +622,7 @@ function MeatCutting.Start(part: BasePart)
 	local s: Session = { meat = meat, knife = res.knife, interval = res.interval, window = res.window, slices = res.slices, auto = res.auto, part = part }
 	session = s
 	lastPress = 0
+	startedAt = os.clock()
 	-- step up to the spit: square to the meat, right hand in line with it
 	local cx, cz = meatModel:GetAttribute("SpinX") :: number, meatModel:GetAttribute("SpinZ") :: number
 	local away = Vector3.new(root.Position.X - cx, 0, root.Position.Z - cz)
@@ -653,7 +659,7 @@ function MeatCutting.Start(part: BasePart)
 			MeatCutting.Press(false)
 		end
 		return Enum.ContextActionResult.Sink
-	end, false, 3001, Enum.UserInputType.MouseButton1, Enum.KeyCode.Space, Enum.KeyCode.ButtonR2)
+	end, false, 3001, Enum.UserInputType.MouseButton1, Enum.UserInputType.MouseButton2, Enum.KeyCode.Space, Enum.KeyCode.ButtonR2)
 	ContextActionService:BindActionAtPriority("KebapCutExit", function(_, state)
 		if state == Enum.UserInputState.Begin then
 			MeatCutting.Stop()
@@ -714,12 +720,12 @@ function MeatCutting.Start(part: BasePart)
 	local k = Progression.Knives[s.knife]
 	refs.title.Text = string.format("🔪 %s · %s", k.name[State.lang], IngredientData.Meat[meat].name[State.lang])
 	refs.bar.Visible = not s.auto
-	refs.rating.Text = s.auto and tr("Gedrückt halten", "Hold") or tr("Im Takt schneiden", "Cut in rhythm")
+	refs.rating.Text = s.auto and tr("Gedrückt halten", "Hold") or tr("[Leertaste] / Rechtsklick = erster Schnitt", "[Space] / right-click = first cut")
 	refs.rating.TextColor3 = T.text
 	layoutBar(s)
 	setDots(0, s.slices)
 	updatePortions()
-	local keys = UserInputService.TouchEnabled and "" or (s.auto and tr("[Maus/Leertaste] halten", "Hold [Mouse/Space]") or tr("[Klick/Leertaste] schneiden", "[Click/Space] cut"))
+	local keys = UserInputService.TouchEnabled and "" or (s.auto and tr("[Maus/Leertaste] halten", "Hold [Mouse/Space]") or tr("[Leertaste/Klick] im Takt schneiden", "[Space/click] cut in rhythm"))
 	refs.hint.Text = keys .. (keys ~= "" and "  ·  " or "") .. tr("[E] fertig", "[E] done") .. "  ·  " .. tr("grüner Bereich = beste Qualität", "green zone = best quality")
 	if s.auto then
 		refs.hint.Text = keys .. "  ·  " .. tr("[E] fertig", "[E] done")
@@ -740,7 +746,8 @@ function MeatCutting.Init()
 		local s = session
 		if s and not s.auto and gui.Enabled then
 			-- measured from the last own stroke (the server times the gaps between strokes the same way)
-			local since = lastPress > 0 and (os.clock() - lastPress) or s.interval * 2
+			-- before the first stroke the marker waits at the start: the rhythm begins with the first cut
+			local since = lastPress > 0 and (os.clock() - lastPress) or 0
 			refs.marker.Position = UDim2.fromScale(math.clamp(since / (s.interval * 2), 0, 1), 0.5)
 			local inZone = math.abs(since - s.interval) <= s.window
 			refs.marker.BackgroundColor3 = inZone and Color3.fromRGB(180, 255, 190) or Color3.new(1, 1, 1)
