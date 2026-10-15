@@ -1,5 +1,6 @@
--- Physical logistics: every ordered good arrives as a box from a delivery van, is unloaded onto the
--- loading zone outside, carried by hand into the storage room (shelves) or the cold room (meat),
+-- Physical logistics: every ordered good arrives as a box from a delivery van (Server/DeliveryVanService,
+-- it drives into the backyard), is unloaded onto the unloading area behind the restaurant, carried
+-- by hand through the back door into the storage room (shelves) or the cold room (meat),
 -- and carried from the shelf to the kitchen station that needs it. Nothing teleports into stock.
 --
 -- Server authoritative: boxes live in the owner's save (data.logi.boxes) with one location each
@@ -8,7 +9,6 @@
 
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
-local TweenService = game:GetService("TweenService")
 local Services = script.Parent
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 
@@ -17,15 +17,15 @@ local DataService = require(Services.DataService)
 local EconomyService = require(Services.EconomyService)
 local RestaurantService = require(Services.RestaurantService)
 local FoodPreparationService = require(Services.FoodPreparationService)
-local CustomerService = require(Services.CustomerService)
+local DeliveryVanService = require(Services.DeliveryVanService)
 local IngredientData = require(Shared.IngredientData)
 
 local LogisticsService = {}
 
 -- layout --------------------------------------------------------------------
-local ZONE_ORIGIN = Vector3.new(20.2, 0.25, 24.6) -- loading zone on the sidewalk, right of the door
-local VAN_Z = 37.5
-local VAN_PARK_X = 23
+-- unloading spots in the backyard (Server/BackyardService): a row on the asphalt between the
+-- parked van's rear doors and the building, then a second row on the landing at the back door
+local UNLOAD_ROWS = { { x = 22.6, z = -29.1, y = 0.15 }, { x = 22.6, z = -25.4, y = 0.25 } }
 local SHELVES = { { x = 17.5, group = 1 }, { x = 23.5, group = 2 } }
 local SHELF_Z = -18.9
 local BOARD_Y = { 0.8, 3.1, 5.4, 7.7 }
@@ -196,10 +196,11 @@ end
 
 -- rendering -----------------------------------------------------------------
 local function zoneCF(i: number): CFrame
-	local col = (i - 1) % 3
-	local row = math.floor((i - 1) / 3) % 2
-	local layer = math.floor((i - 1) / 6)
-	return CFrame.new(ZONE_ORIGIN + Vector3.new(col * 2.3, BOX_SIZE.Y / 2 + layer * BOX_SIZE.Y, row * 1.9))
+	local k = i - 1
+	local row = UNLOAD_ROWS[math.min(#UNLOAD_ROWS, math.floor(k / 18) + 1)]
+	local within = k % 18
+	local col, layer = within % 6, math.floor(within / 6)
+	return CFrame.new(row.x + col * 2.3, row.y + BOX_SIZE.Y / 2 + layer * BOX_SIZE.Y, row.z)
 end
 
 local function render()
@@ -501,75 +502,15 @@ local function orderHook(stockId: string, amount: number, delay: number, player:
 	render()
 end
 
-local function newRig(): Model?
-	local ok, rig = pcall(CustomerService.NewRig)
-	if not ok or not rig then
-		return nil
-	end
-	pcall(CustomerService.Dress, rig, { shirt = Color3.fromRGB(240, 200, 40), pants = Color3.fromRGB(50, 50, 60), skin = Color3.fromRGB(214, 170, 130), shoes = Color3.fromRGB(30, 30, 30), hat = true, hatColor = Color3.fromRGB(230, 70, 40) })
-	rig.Name = "DeliveryDriver"
-	return rig
-end
-
-local function buildVan(): Model
-	local m = Instance.new("Model")
-	m.Name = "DeliveryVan"
-	local lib = ServerStorage:FindFirstChild("Models") and ServerStorage.Models:FindFirstChild("Logistics")
-	local tpl = lib and lib:FindFirstChild("Van")
-	local base = CFrame.new(0, 0, VAN_Z)
-	if tpl then
-		local v = tpl:Clone()
-		for _, p in ipairs(v:GetDescendants()) do
-			if p:IsA("BasePart") then
-				p.Anchored = true
-				p.CanCollide = false
-			end
-		end
-		v:PivotTo(base)
-		v.Parent = m
-		local root = v:IsA("BasePart") and v or v:FindFirstChildWhichIsA("BasePart", true)
-		m.PrimaryPart = root
-		return m
-	end
-	local white, glass = Color3.fromRGB(245, 245, 245), Color3.fromRGB(40, 60, 80)
-	local body = bit(m, "Body", Vector3.new(12, 6, 5.6), base * CFrame.new(-1, 4.1, 0), white)
-	bit(m, "Cab", Vector3.new(3, 4, 5.6), base * CFrame.new(6.5, 3.1, 0), white)
-	bit(m, "Windshield", Vector3.new(0.2, 2, 5), base * CFrame.new(8.05, 4, 0) * CFrame.Angles(0, 0, math.rad(-15)), glass, Enum.Material.Glass)
-	bit(m, "SideWindow", Vector3.new(2, 1.6, 5.7), base * CFrame.new(6.5, 4.2, 0), glass, Enum.Material.Glass)
-	bit(m, "Stripe", Vector3.new(12.02, 0.8, 5.62), base * CFrame.new(-1, 3.2, 0), Color3.fromRGB(230, 70, 40))
-	for _, x in ipairs({ -5, 5.5 }) do
-		for _, z in ipairs({ -2.6, 2.6 }) do
-			local w = bit(m, "Wheel", Vector3.new(0.8, 2.2, 2.2), base * CFrame.new(x, 1.1, z) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(25, 25, 25))
-			w.Shape = Enum.PartType.Cylinder
+local function outCount(): number
+	local n = 0
+	local l = logi()
+	for _, b in ipairs(l and l.boxes or {}) do
+		if b.at == "out" then
+			n += 1
 		end
 	end
-	local sign = bit(m, "Sign", Vector3.new(8, 2, 0.05), base * CFrame.new(-1, 4.8, -2.83), white)
-	local sg = Instance.new("SurfaceGui")
-	sg.Face = Enum.NormalId.Front
-	sg.Parent = sign
-	local t = Instance.new("TextLabel")
-	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundTransparency = 1
-	t.Font = Enum.Font.GothamBlack
-	t.TextScaled = true
-	t.TextColor3 = Color3.fromRGB(230, 70, 40)
-	t.Text = "FRISCH-LIEFERDIENST"
-	t.Parent = sg
-	m.PrimaryPart = body
-	return m
-end
-
-local function driveVan(van: Model, fromX: number, toX: number, secs: number)
-	local v = Instance.new("NumberValue")
-	v.Value = fromX
-	local conn = v.Changed:Connect(function(x)
-		van:PivotTo(CFrame.new(x, 0, VAN_Z))
-	end)
-	local tw = TweenService:Create(v, TweenInfo.new(secs, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { Value = toX })
-	tw:Play()
-	tw.Completed:Wait()
-	conn:Disconnect()
-	v:Destroy()
+	return n
 end
 
 local function runVan()
@@ -599,68 +540,44 @@ local function runVan()
 		vanBusy = false
 		return
 	end
-	-- 2) the van drives up, the driver unloads every box onto the loading zone
-	local van = buildVan()
-	van:PivotTo(CFrame.new(-170, 0, VAN_Z))
-	van.Parent = folder
-	driveVan(van, -170, VAN_PARK_X, 7)
-	Net.Sound(nil, "doorbell", Vector3.new(VAN_PARK_X, 3, VAN_Z))
 	if owner and owner.Parent then
-		Net.Notify(owner, ("🚚 Lieferung ist da – %d Kiste(n) werden abgeladen"):format(#load), nil, "success")
+		Net.Notify(owner, ("🚚 Lieferwagen kommt in den Hinterhof – %d Kiste(n)"):format(#load), nil, "info")
 	end
-	local driver = newRig()
-	local hum = driver and driver:FindFirstChildOfClass("Humanoid")
-	local door = Vector3.new(VAN_PARK_X - 7.5, 3, VAN_Z - 1)
-	if driver and hum then
-		driver:PivotTo(CFrame.new(door))
-		driver.Parent = folder
-		hum.WalkSpeed = 14
+	-- 2) the van drives into the backyard and the driver unloads every box (Server/DeliveryVanService).
+	-- Each box changes "van" -> "out" exactly once, when the driver puts it down.
+	local ok, err = pcall(DeliveryVanService.Run, load, {
+		spot = function()
+			return zoneCF(outCount() + 1)
+		end,
+		unload = function(b)
+			if b.at == "van" then
+				b.at = "out"
+				dirty()
+				render()
+			end
+		end,
+		model = function(b, cf)
+			return buildBox(b, cf)
+		end,
+	})
+	if not ok then
+		warn("[LogisticsService] delivery van failed: " .. tostring(err))
 	end
+	-- 3) safety net: whatever is still "in the van" (error, timeout) lands on the unloading area
+	local missed = false
 	for _, b in ipairs(load) do
-		if b.at ~= "van" then
-			continue
+		if b.at == "van" then
+			b.at = "out"
+			missed = true
 		end
-		local held
-		if driver and hum then
-			local root = driver:FindFirstChild("HumanoidRootPart") :: BasePart
-			held = buildBox(b, root.CFrame * CFrame.new(0, 0, -1.3))
-			for _, p in ipairs(held:GetDescendants()) do
-				if p:IsA("BasePart") then
-					p.Anchored = false
-					p.Massless = true
-					local w = Instance.new("WeldConstraint")
-					w.Part0 = root
-					w.Part1 = p
-					w.Parent = p
-				end
-			end
-			held.Parent = driver
-			hum:MoveTo(ZONE_ORIGIN + Vector3.new(2, 0, 1))
-			local t0 = os.clock()
-			while os.clock() - t0 < 4 and (root.Position - (ZONE_ORIGIN + Vector3.new(2, 3, 1))).Magnitude > 3.5 do
-				task.wait(0.1)
-			end
-			task.wait(0.3)
-		else
-			task.wait(0.6)
-		end
-		if held then
-			held:Destroy()
-		end
-		b.at = "out"
+	end
+	if missed then
 		dirty()
 		render()
-		if driver and hum then
-			hum:MoveTo(door)
-			task.wait(1.2)
-		end
 	end
-	if driver then
-		driver:Destroy()
+	if owner and owner.Parent then
+		Net.Notify(owner, ("📦 %d Kiste(n) im Hinterhof abgeladen"):format(#load), nil, "success")
 	end
-	task.wait(0.5)
-	driveVan(van, VAN_PARK_X, 190, 6)
-	van:Destroy()
 	vanBusy = false
 end
 
@@ -728,45 +645,6 @@ local function buildWorld()
 		end
 	end
 	dropPart("ColdDrop", Vector3.new(4, 6, 4), COLD_DROP, "logi_cold", "Im Kühlraum einlagern")
-	-- loading zone markings + sign
-	local zone = Instance.new("Part")
-	zone.Name = "LoadingZone"
-	zone.Size = Vector3.new(7.4, 0.05, 4.8)
-	zone.Position = ZONE_ORIGIN + Vector3.new(2.1, -0.2, 0.95)
-	zone.Color = Color3.fromRGB(240, 196, 40)
-	zone.Material = Enum.Material.SmoothPlastic
-	zone.Anchored = true
-	zone.CanCollide = false
-	zone.Parent = folder
-	for i = 0, 4 do
-		local s = Instance.new("Part")
-		s.Name = "ZoneStripe"
-		s.Size = Vector3.new(0.5, 0.06, 4.8)
-		s.CFrame = CFrame.new(zone.Position + Vector3.new(-3.2 + i * 1.6, 0.01, 0)) * CFrame.Angles(0, math.rad(30), 0)
-		s.Color = Color3.fromRGB(30, 30, 30)
-		s.Material = Enum.Material.SmoothPlastic
-		s.Anchored = true
-		s.CanCollide = false
-		s.Parent = folder
-	end
-	local post = Instance.new("Part")
-	post.Name = "ZoneSign"
-	post.Size = Vector3.new(3.4, 1.2, 0.15)
-	post.Position = ZONE_ORIGIN + Vector3.new(2.1, 3.6, -1.2)
-	post.Color = Color3.fromRGB(240, 196, 40)
-	post.Anchored = true
-	post.CanCollide = false
-	post.Parent = folder
-	label(post, Enum.NormalId.Back, "🚚 LIEFERZONE")
-	label(post, Enum.NormalId.Front, "🚚 LIEFERZONE")
-	local pole = Instance.new("Part")
-	pole.Name = "ZonePole"
-	pole.Size = Vector3.new(0.2, 3.6, 0.2)
-	pole.Position = ZONE_ORIGIN + Vector3.new(2.1, 1.6, -1.2)
-	pole.Color = Color3.fromRGB(90, 90, 95)
-	pole.Material = Enum.Material.Metal
-	pole.Anchored = true
-	pole.Parent = folder
 end
 
 -- client state: incoming orders, boxes waiting, warehouse fill
