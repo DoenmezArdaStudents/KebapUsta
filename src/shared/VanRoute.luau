@@ -13,7 +13,7 @@ local VanRoute = {}
 
 local LANE = -56.8 -- eastbound lane of the back street (driving on the right)
 local GATE_X = 29
-VanRoute.PARK_Z = -37.5 -- van centre when parked (rear face at about z -30.9)
+VanRoute.PARK_Z = -40.5 -- van centre when parked (rear face at about z -33.9)
 VanRoute.TRUCK_X = 33 -- garbage truck centre when stopped (18 long: rear hopper at x ≈ 24, by the gate)
 
 -- static phases: the end pose of a moving phase
