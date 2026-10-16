@@ -457,9 +457,11 @@ local function neededPortions(): number?
 	return item and item.meatPortions or nil
 end
 
+-- portions cut so far: in the meat pan plus what is already on the bread
 local function meatInMeal(): number
-	local m = State.player and State.player.meal
-	local n = 0
+	local ps = State.player
+	local m = ps and ps.meal
+	local n = ps and ps.bowl and #ps.bowl or 0
 	if m then
 		for _, v in pairs(m.meat) do
 			n += v
@@ -813,8 +815,8 @@ function MeatCutting.Init()
 	end)
 	State.Changed:Connect(function(what)
 		if what == "player" and session then
-			local m = State.player and State.player.meal
-			if not m or m.closed or State.player.location == "grill" then
+			-- the portions go into the meat pan in your hands (issue #3)
+			if not State.player or State.player.bowlAt ~= "hand" then
 				MeatCutting.Stop()
 			else
 				updatePortions()

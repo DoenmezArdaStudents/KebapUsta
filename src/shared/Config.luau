@@ -77,6 +77,7 @@ Config.Prep = {
 	ToastBurnt = 11,
 	BaseMeatPortions = 2,
 	MaxMeatPortions = 5,
+	BowlPortions = 5, -- meat pan: carved portions wait in it until they go on the bread
 	MaxIngredientPortions = 3,
 	ActionCooldown = 0.12,
 	PromptDistance = 6,

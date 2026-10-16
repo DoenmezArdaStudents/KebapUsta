@@ -1,7 +1,8 @@
 -- Visible items in the player's hand: every successful kitchen action briefly puts the real item
 -- (bread, a lettuce leaf, a sauce bottle, a drink …) into the right hand, welded to RightHand so
 -- everyone sees it. The player attributes HandAct/HandT drive the arm pose and the first-person
--- view model on the clients (Client/HandUI). The carried tray also flags "Tray" for a held pose.
+-- view model on the clients (Client/HandUI). The carried tray ("Tray") and the held bread, meat pan or
+-- bread top ("Hold", Server/FoodPreparationService) flag a held pose; those are carried models, no flash.
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -119,6 +120,13 @@ function HandService.Flash(player: Player, kind: string, item: any, secs: number
 		return
 	end
 	m.Name = "Hand_" .. player.UserId
+	-- where the fist is relative to the item: the first-person view model (Client/HandUI) puts its fist here
+	local grip = Instance.new("Part")
+	grip.Name = "Grip"
+	grip.Size = Vector3.new(0.2, 0.2, 0.2)
+	grip.Transparency = 1
+	grip.CFrame = hand.CFrame
+	grip.Parent = m
 	for _, p in ipairs(m:GetDescendants()) do
 		if p:IsA("BasePart") then
 			p.Anchored = false
@@ -147,14 +155,17 @@ function HandService.Flash(player: Player, kind: string, item: any, secs: number
 	end)
 end
 
--- snapshot of what an action can change: meal contents, tray, grill
-local function signature(player: Player): string
+-- snapshot of what an action can change: meal contents, tray, grill (not where things lie: putting
+-- them down or picking them up is no kitchen action). At the board only closing/packing shows foil.
+local function signature(player: Player, kind: string): string
 	local s = FoodPreparationService.GetState(player)
-	local ok, json = pcall(HttpService.JSONEncode, HttpService, { s.meal, #s.tray, s.location, s.grillStart ~= nil })
+	local snap = kind == "board" and { s.meal and s.meal.closed, #s.tray } or { s.meal, #s.tray, s.grillStart ~= nil }
+	local ok, json = pcall(HttpService.JSONEncode, HttpService, snap)
 	return ok and json or tostring(os.clock())
 end
 
-local SHOWS = { sauce = true, veg = true, cheese = true, bread = true, drink = true, grill = true, board = true }
+-- sauces are carried bottles with their own squeeze / pump animation (Server/FoodPreparationService)
+local SHOWS = { veg = true, cheese = true, drink = true, grill = true, board = true }
 
 function HandService.Init()
 	folder = Instance.new("Folder")
@@ -162,10 +173,12 @@ function HandService.Init()
 	folder.Parent = workspace
 	-- wrap every kitchen action: if it changed something, show the item in the hand
 	FoodPreparationService.BeforeAction = function(player: Player, kind: string)
-		return SHOWS[kind] and signature(player) or nil
+		return SHOWS[kind] and signature(player, kind) or nil
 	end
+	-- squeezing a carried bottle / putting a carried portion on at the board looks the same
+	FoodPreparationService.FlashHook = HandService.Flash
 	FoodPreparationService.AfterAction = function(player: Player, part: BasePart, kind: string, before: string?)
-		if before and signature(player) ~= before then
+		if before and signature(player, kind) ~= before then
 			HandService.Flash(player, kind, part:GetAttribute("Item"))
 		end
 	end

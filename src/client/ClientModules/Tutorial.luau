@@ -10,7 +10,7 @@ local UI = require(script.Parent.UI)
 
 local Tutorial = {}
 
-local TOTAL = 7
+local TOTAL = 8
 local highlight: Highlight
 local finishedShownAt: number? = nil
 local hadTicket = false
@@ -22,6 +22,24 @@ local function station(kind: string, item: string?): Instance?
 		end
 	end
 	return nil
+end
+
+-- a prep board: the given one, otherwise one nobody else works at
+local function board(index: any): Instance?
+	local me = game:GetService("Players").LocalPlayer.UserId
+	local fallback = nil
+	for _, p in ipairs(CollectionService:GetTagged("Station")) do
+		if p:GetAttribute("Station") == "board" then
+			if p:GetAttribute("Board") == index then
+				return p
+			end
+			local user = p:GetAttribute("User")
+			if not fallback and (user == nil or user == me) then
+				fallback = p
+			end
+		end
+	end
+	return fallback or station("board", nil)
 end
 
 local function customerInState(state: string): Instance?
@@ -50,7 +68,7 @@ local function compute(): (number?, string?, Instance?)
 	end
 	if ps.tutorialDone then
 		if finishedShownAt and os.clock() - finishedShownAt < 9 then
-			return 7, "tut_7", station("laptop")
+			return 8, "tut_8", station("laptop")
 		end
 		return nil
 	end
@@ -63,7 +81,11 @@ local function compute(): (number?, string?, Instance?)
 		end
 	end
 	if trayHasMeal then
-		return 6, "tut_6", customerInState("WaitingForFood")
+		-- the tray stands at the board until you pick it up
+		if type(ps.trayAt) == "number" then
+			return 7, "tut_7", board(ps.trayAt)
+		end
+		return 7, "tut_7", customerInState("WaitingForFood")
 	end
 	if not item then
 		if hadTicket then
@@ -72,30 +94,56 @@ local function compute(): (number?, string?, Instance?)
 		return 1, "tut_1", customerInState("Ordering")
 	end
 	hadTicket = true
+	-- order of work (issue #3): meat into the pan → pan and bread onto the board → fill → close → serve
+	local need = item.meatPortions or 0
+	local inBowl = ps.bowl and #ps.bowl or 0
+	local inMeal = meal and OrderLogic.MeatTotal(meal) or 0
+	local myBoard = (meal and ps.location == "board" and ps.board) or (type(ps.bowlAt) == "number" and ps.bowlAt) or ps.trayAt
+	if inMeal + inBowl < need then
+		return 2, "tut_2", station("spit", item.meat == "veal" and "veal" or "chicken")
+	end
+	if not meal and ps.bowlAt == "hand" then
+		return 3, "tut_3", board(myBoard)
+	end
 	if not meal then
-		return 2, "tut_2", station("bread", item.bread)
+		return 4, "tut_4", station("bread", item.bread)
+	end
+	if ps.location == "hand" then
+		return 4, "tut_4", board(myBoard)
+	end
+	if inBowl > 0 and inMeal < need then
+		return 5, "tut_5", board(myBoard)
 	end
 	local list = OrderLogic.Checklist(item, meal)
-	local states = {}
-	for _, e in ipairs(list) do
-		states[e.key] = e.state
+	-- a sauce bottle in the hand: squeeze it on at the board, then back into its dispenser
+	if ps.sauce then
+		for _, e in ipairs(list) do
+			if e.key == "sauce:" .. ps.sauce and e.state ~= "ok" then
+				return 5, "tut_5", board(myBoard)
+			end
+		end
+		return 5, "tut_5", station("sauce", ps.sauce)
 	end
-	if states.meat and states.meat ~= "ok" then
-		return 3, "tut_3", station("spit", item.meat == "veal" and "veal" or "chicken")
+	-- a vegetable / cheese portion in the hand: onto the bread at the board
+	if ps.portion then
+		return 5, "tut_5", board(myBoard)
 	end
 	for _, e in ipairs(list) do
 		if (string.sub(e.key, 1, 4) == "veg:" or string.sub(e.key, 1, 6) == "sauce:") and e.state ~= "ok" then
 			local kind = string.sub(e.key, 1, 4) == "veg:" and "veg" or "sauce"
-			return 4, "tut_4", station(kind, e.data.id)
+			return 5, "tut_5", station(kind, e.data.id)
 		end
 	end
-	return 5, "tut_5", station("board", nil)
+	if not meal.closed and meal.bread == "classic" and not ps.lid then
+		return 6, "tut_6", station("bread", "classic")
+	end
+	return 6, "tut_6", board(myBoard)
 end
 
 local function refresh()
 	local hints = not State.player or State.player.settings == nil or State.player.settings.hints ~= false
 	local step, key, target = compute()
-	if not hints and step ~= 7 then
+	if not hints and step ~= 8 then
 		step = nil
 	end
 	UI.SetTutorial(step, TOTAL, key)

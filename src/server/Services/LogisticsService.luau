@@ -314,7 +314,7 @@ end
 
 -- actions -------------------------------------------------------------------
 local function onPick(player: Player, part: BasePart)
-	if carrying[player] or (player.Character and player.Character:FindFirstChild("CarriedCone")) or (LogisticsService.HandsBusyHook and LogisticsService.HandsBusyHook(player)) then
+	if carrying[player] or (player.Character and player.Character:FindFirstChild("CarriedCone")) or FoodPreparationService.HandsBusy(player) or (LogisticsService.HandsBusyHook and LogisticsService.HandsBusyHook(player)) then
 		Net.Notify(player, "🙌 Du hast schon die Hände voll", nil, "warn")
 		return
 	end

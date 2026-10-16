@@ -18,7 +18,6 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Business = require(Shared.Business)
 local Config = require(Shared.Config)
 local IngredientData = require(Shared.IngredientData)
-local OrderLogic = require(Shared.OrderLogic)
 local Progression = require(Shared.Progression)
 local Net = require(script.Parent.Net)
 local RestaurantService = require(script.Parent.RestaurantService)
@@ -132,23 +131,16 @@ local function takePortion(player: Player, part: BasePart)
 	if not pan or #pan.items == 0 then
 		return
 	end
-	local meal = FoodPreparationService.RequireOpenMeal(player)
-	if not meal then
-		return
-	end
-	if OrderLogic.MeatTotal(meal) >= Config.Prep.MaxMeatPortions then
-		Net.Notify(player, "n_too_much", nil, "warn")
+	-- into the meat pan in the cook's hands, like carving yourself (issue #3)
+	if not FoodPreparationService.CutBowl(player, true) then
 		return
 	end
 	local it = table.remove(pan.items, 1)
 	-- meat waiting in the pan slowly dries out
 	local age = os.clock() - it.t
 	local q = it.q * math.clamp(1 - math.max(0, age - 60) / 300, 0.6, 1)
-	meal.meat[meat] = (meal.meat[meat] or 0) + 1
-	table.insert(meal.meatQuality, q)
-	table.insert(meal.steps, "meat:" .. meat)
+	FoodPreparationService.AddToBowl(player, meat, q)
 	Net.Sound(player, "add")
-	FoodPreparationService.RefreshMeal(player)
 	updatePan(meat)
 end
 

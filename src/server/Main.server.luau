@@ -268,6 +268,13 @@ if game:GetService("RunService"):IsStudio() then
 				clock = RestaurantService.Clock,
 				meal = prep and prep.meal,
 				tray = prep and #prep.tray,
+				-- hands (issue #3)
+				location = prep and prep.location,
+				board = prep and prep.board,
+				bowl = prep and prep.bowl,
+				bowlAt = prep and prep.bowlAt,
+				lid = prep and prep.lid,
+				trayAt = prep and prep.trayAt,
 				dayStats = RestaurantService.DayStats,
 				saving = p and DataService.IsSaving(p),
 			}
@@ -288,6 +295,12 @@ if game:GetService("RunService"):IsStudio() then
 			end
 			RestaurantService.PushShop()
 			return true
+		elseif cmd == "solo" and p then
+			-- start a solo session right here, like the lobby's "play solo" in Studio
+			if ReplicatedStorage:GetAttribute("Mode") ~= "game" and LobbyService.StartInPlace then
+				LobbyService.StartInPlace(p.UserId, arg or 1)
+			end
+			return ReplicatedStorage:GetAttribute("Mode")
 		elseif cmd == "spawn" then
 			local c = CustomerService.Spawn(arg or {})
 			return c and c.id

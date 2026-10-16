@@ -631,6 +631,11 @@ local function pick(player: Player, part: BasePart)
 		Net.Notify(player, "n_waste_tray", nil, "warn")
 		return
 	end
+	-- the hand system: bread, meat pan, sauce bottle, portion, bag … (Server/FoodPreparationService)
+	if FoodPreparationService.HandsBusy(player) then
+		Net.Notify(player, "n_hands_full", nil, "warn")
+		return
+	end
 	local it = findItem(part:GetAttribute("Waste"))
 	if not it or isCarried(it.u) then
 		return
@@ -981,8 +986,10 @@ end
 ---------------------------------------------------------------------------
 local function actionSig(player: Player, kind: string, part: BasePart): string?
 	if kind == "veg" or kind == "board" or kind == "trash" then
+		-- vegetables are taken as carried portions and the meat pan, a portion or the bread top can be
+		-- thrown away too (Server/FoodPreparationService, issue #3)
 		local s = FoodPreparationService.GetState(player)
-		local ok, json = pcall(HttpService.JSONEncode, HttpService, { s.meal, #s.tray })
+		local ok, json = pcall(HttpService.JSONEncode, HttpService, { s.meal, #s.tray, s.portion ~= nil, s.bowl and #s.bowl or 0, s.lid == true })
 		return ok and json or nil
 	elseif kind == "fresh" then
 		return tostring((BusinessService.Fresh() or {})[part:GetAttribute("Item")])

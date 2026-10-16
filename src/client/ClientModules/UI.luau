@@ -322,9 +322,14 @@ local function updateMeal()
 	if meal then
 		local breadDef = IngredientData.Bread[meal.bread]
 		local title = breadDef.icon .. " " .. L("meal_title")
+		-- where the meal is right now: nothing moves unless you carry it (issue #3)
 		if ps.location == "grill" then
 			local elapsed = (ps.grillElapsed or 0) + (os.clock() - State.grillReceivedAt)
 			title ..= string.format("  ·  🔥 %.0fs <font color='#b0aca8'>(%d–%ds)</font>", elapsed, Config.Prep.ToastPerfectMin, Config.Prep.ToastPerfectMax)
+		elseif ps.location == "board" then
+			title ..= "  ·  " .. L("loc_board", { n = ps.board or "" })
+		elseif ps.location == "hand" then
+			title ..= "  ·  " .. L("loc_hand")
 		end
 		refs.mealTitle.Text = title
 	else
@@ -371,6 +376,17 @@ local function updateMeal()
 	else
 		refs.mealSub.Text = L("meal_empty")
 	end
+	-- a sauce bottle or a vegetable / cheese portion in the hand
+	if ps.sauce then
+		refs.mealSub.Text = string.format("🧴 %s ✋  ·  %s", ing(ps.sauce), refs.mealSub.Text)
+	elseif ps.portion then
+		refs.mealSub.Text = string.format("%s ✋  ·  %s", ing(ps.portion.id), refs.mealSub.Text)
+	end
+	-- the meat pan: carved portions waiting to go on the bread
+	if ps.bowl and #ps.bowl > 0 then
+		local where = ps.bowlAt == "hand" and "✋" or "🔪"
+		refs.mealSub.Text = string.format("🥩 %s %d/%d %s  ·  %s", L("bowl_label"), #ps.bowl, Config.Prep.BowlPortions, where, refs.mealSub.Text)
+	end
 	prevChip = nextChip
 	-- tray
 	local parts = {}
@@ -382,8 +398,9 @@ local function updateMeal()
 			table.insert(parts, (m.bread == "duerum" and "🌯" or (m.bread == "box" and "📦" or "🥙")) .. (m.pack == "takeaway" and "🛍️" or "🍽️"))
 		end
 	end
-	refs.tray.Text = string.format("%s  <font color='#b0aca8'>%d/%d</font>", #parts > 0 and table.concat(parts, " ") or "🍽️", #(ps.tray or {}), ps.trayCap or 2)
-	setMealVisible(meal ~= nil or item ~= nil or #(ps.tray or {}) > 0)
+	local where = ps.trayAt == "hand" and "✋ " or (type(ps.trayAt) == "number" and "🔪 " or "")
+	refs.tray.Text = string.format("%s%s  <font color='#b0aca8'>%d/%d</font>", where, #parts > 0 and table.concat(parts, " ") or "🍽️", #(ps.tray or {}), ps.trayCap or 2)
+	setMealVisible(meal ~= nil or item ~= nil or #(ps.tray or {}) > 0 or ps.bowl ~= nil)
 end
 
 ---------------------------------------------------------------------------

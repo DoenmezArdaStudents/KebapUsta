@@ -65,9 +65,46 @@ local function donenessText(d: number): string
 	return State.lang == "de" and "perfekt 🟢" or "perfect 🟢"
 end
 
+-- vegetables, cheese and sauces go onto your open bread (on the board or in your hand)
 local function canAdd(): boolean
 	local m = meal()
 	return m ~= nil and not m.closed and State.player.location ~= "grill"
+end
+
+-- one pair of hands (issue #3): bread, meat pan, bread top, tray or a box / meat cone
+local function heldMeal(): boolean
+	local ps = State.player
+	return ps ~= nil and ps.meal ~= nil and ps.location == "hand"
+end
+
+local function handsBusyNoTray(): boolean
+	local ps = State.player
+	local held = ps ~= nil and (heldMeal() or ps.bowlAt == "hand" or ps.lid == true or ps.sauce ~= nil or ps.portion ~= nil)
+	return held or game:GetService("Players").LocalPlayer:GetAttribute("Carry") ~= nil
+end
+
+local function handsBusy(): boolean
+	return handsBusyNoTray() or (State.player ~= nil and State.player.trayAt == "hand")
+end
+
+local function meatTotal(m: any): number
+	local n = 0
+	for _, v in pairs(m and m.meat or {}) do
+		n += v
+	end
+	return n
+end
+
+-- carving fills the pan in your hands, or a new one
+local function canCut(): boolean
+	local ps = State.player
+	if Interaction.IsCutting() then
+		return false
+	end
+	if ps.bowlAt == "hand" then
+		return #(ps.bowl or {}) < Config.Prep.BowlPortions
+	end
+	return ps.bowlAt == nil and not handsBusy()
 end
 
 local function refreshStation(e: Entry)
@@ -83,20 +120,22 @@ local function refreshStation(e: Entry)
 	prompt.HoldDuration = 0
 	if kind == "bread" then
 		local def = IngredientData.Bread[item]
-		prompt.ActionText = L("p_take")
-		prompt.ObjectText = def.name[State.lang] .. stockText(def.stock)
-		prompt.Enabled = m == nil
+		-- a classic bread's top half is fetched on its own, for closing it at the board
+		local lid = m ~= nil and item == "classic" and m.bread == "classic" and not m.closed
+		prompt.ActionText = lid and L("p_take_lid") or L("p_take")
+		prompt.ObjectText = def.name[State.lang] .. (lid and "" or stockText(def.stock))
+		prompt.Enabled = (m == nil or (lid and not ps.lid)) and not handsBusy()
 	elseif kind == "grill" then
 		local slot = part:GetAttribute("Slot")
 		if ps.location == "grill" and ps.grillSlot == slot then
 			local elapsed = (ps.grillElapsed or 0) + (os.clock() - State.grillReceivedAt)
 			prompt.ActionText = L("p_toast_out")
 			prompt.ObjectText = string.format("%.0fs (%d–%ds)", elapsed, Config.Prep.ToastPerfectMin, Config.Prep.ToastPerfectMax)
-			prompt.Enabled = true
+			prompt.Enabled = not handsBusy()
 		else
 			prompt.ActionText = L("p_toast_in")
 			prompt.ObjectText = State.lang == "de" and "Kontaktgrill" or "Contact grill"
-			prompt.Enabled = m ~= nil and not m.closed and m.bread ~= "box" and ps.location ~= "grill"
+			prompt.Enabled = m ~= nil and not m.closed and m.bread ~= "box" and ps.location == "hand"
 		end
 	elseif kind == "spit" then
 		local spitModel = part.Parent
@@ -104,60 +143,142 @@ local function refreshStation(e: Entry)
 		local def = IngredientData.Meat[item]
 		prompt.ActionText = L("p_cut")
 		prompt.ObjectText = def.name[State.lang] .. " · " .. donenessText(d) .. stockText(def.stock)
-		prompt.Enabled = canAdd() and not Interaction.IsCutting()
+		prompt.Enabled = canCut()
 	elseif kind == "spit_heat" then
 		local spitModel = part.Parent
 		local heat = spitModel and spitModel:GetAttribute("Heat") or "low"
 		prompt.ActionText = L("p_heat")
 		prompt.ObjectText = (State.lang == "de" and "Hitze: " or "Heat: ") .. (heat == "high" and "🔥🔥" or "🔥")
 		prompt.Enabled = true
-	elseif kind == "veg" or kind == "sauce" or kind == "cheese" then
+	elseif kind == "sauce" then
+		-- the bottle itself: take it (to the board) / put it back; with the bread in your hand: pump
+		local def = IngredientData.Find(item)
+		local count = m and (m.sauces[item] or 0) or 0
+		local more = count > 0 and string.format(" (%d→%d)", count, count + 1) or ""
+		prompt.ObjectText = (def and def.name[State.lang] or item) .. stockText(def and def.stock or item)
+		local heldBy = part:GetAttribute("HeldBy")
+		if ps.sauce == item then
+			prompt.ActionText = L("p_sauce_back")
+			prompt.Enabled = true
+		elseif heldBy ~= nil then
+			prompt.ActionText = L("p_sauce_taken")
+			prompt.Enabled = false
+		elseif heldMeal() then
+			prompt.ActionText = L("p_sauce_pump") .. more
+			prompt.Enabled = canAdd()
+		else
+			prompt.ActionText = L("p_take")
+			prompt.Enabled = not handsBusy()
+		end
+	elseif kind == "veg" or kind == "cheese" then
+		-- one portion into the hand (to the board) / back; with the bread in your hand straight into it
 		local def = IngredientData.Find(item)
 		local count = 0
 		if m then
 			if kind == "veg" then
 				count = m.veg[item] or 0
-			elseif kind == "sauce" then
-				count = m.sauces[item] or 0
 			else
 				count = m.cheese
 			end
 		end
-		prompt.ActionText = L("p_add") .. (count > 0 and string.format(" (%d→%d)", count, count + 1) or "")
+		local more = count > 0 and string.format(" (%d→%d)", count, count + 1) or ""
 		prompt.ObjectText = (def and def.name[State.lang] or item) .. stockText(def and def.stock or item)
-		prompt.Enabled = canAdd()
-	elseif kind == "board" then
-		local mine = ps.board == part:GetAttribute("Board") and ps.location ~= "grill" and m ~= nil
-		local p2 = e.prompt2 :: ProximityPrompt
-		if mine and m and not m.closed then
-			local verb = m.bread == "duerum" and "close_wrap" or (m.bread == "box" and "close_lid" or "close_close")
-			prompt.ActionText = L(verb)
-			prompt.ObjectText = L("meal_title")
-			prompt:SetAttribute("Action", "close")
+		if ps.portion and ps.portion.id == item then
+			prompt.ActionText = L("p_portion_back")
 			prompt.Enabled = true
-			p2.Enabled = false
-		elseif mine and m then
-			prompt.ActionText = L("p_pack_takeaway")
-			prompt.ObjectText = "🛍️"
-			prompt:SetAttribute("Action", "pack_takeaway")
-			prompt.Enabled = true
-			p2.ActionText = L("p_pack_plate")
-			p2.ObjectText = "🍽️"
-			p2:SetAttribute("Action", "pack_plate")
-			p2.Enabled = true
+		elseif heldMeal() then
+			prompt.ActionText = L("p_portion_in") .. more
+			prompt.Enabled = canAdd()
 		else
-			prompt.Enabled = false
-			p2.Enabled = false
+			prompt.ActionText = L("p_take")
+			prompt.Enabled = not handsBusy()
 		end
+	elseif kind == "board" then
+		-- [E] main action, [R] second one; a board someone else works at stays closed
+		local i = part:GetAttribute("Board")
+		local user = part:GetAttribute("User")
+		local p2 = e.prompt2 :: ProximityPrompt
+		local function set(p: ProximityPrompt, action: string?, text: string?, obj: string?)
+			p.Enabled = action ~= nil
+			if action then
+				p.ActionText = text or ""
+				p.ObjectText = obj or ""
+				p:SetAttribute("Action", action)
+			end
+		end
+		local mine = m ~= nil and ps.location == "board" and ps.board == i
+		local open = mine and m ~= nil and not m.closed
+		local free = user == nil or user == game:GetService("Players").LocalPlayer.UserId
+		local meatInPan = #(ps.bowl or {}) > 0
+		local meatFits = m ~= nil and meatTotal(m) < Config.Prep.MaxMeatPortions
+		local verb = m and (m.bread == "duerum" and "close_wrap" or (m.bread == "box" and "close_lid" or "close_close")) or "close_close"
+		local e1, e2 = nil, nil -- { action, text, object }
+		-- a meal to go makes the container a bag
+		local bag = false
+		for _, t in ipairs(ps.tray or {}) do
+			if t.kind == "meal" and t.meal.pack == "takeaway" then
+				bag = true
+			end
+		end
+		local downText, upText, icon = L(bag and "p_bag_down" or "p_tray_down"), L(bag and "p_bag_up" or "p_tray_up"), bag and "🛍️" or "🍽️"
+		if free and heldMeal() then
+			e1 = { "place", L("p_place_meal"), L("meal_title") }
+		elseif free and ps.bowlAt == "hand" then
+			if open and meatInPan and meatFits then
+				e1 = { "meat_on", L("p_meat_on"), "🥩" }
+				e2 = { "bowl_down", L("p_bowl_down"), "🥩" }
+			else
+				e1 = { "bowl_down", L("p_bowl_down"), "🥩" }
+			end
+		elseif free and ps.sauce then
+			if open then
+				local n = m.sauces[ps.sauce] or 0
+				e1 = { "sauce_on", L("p_sauce_on") .. (n > 0 and string.format(" (%d→%d)", n, n + 1) or ""), "🧴" }
+			end
+		elseif free and ps.portion then
+			if open then
+				local id = ps.portion.id
+				local n = ps.portion.kind == "cheese" and m.cheese or (m.veg[id] or 0)
+				local def = IngredientData.Find(id)
+				e1 = { "portion_on", L("p_portion_on") .. (n > 0 and string.format(" (%d→%d)", n, n + 1) or ""), def and def.icon or "🥬" }
+			end
+		elseif free and ps.lid then
+			if open and m.bread == "classic" then
+				e1 = { "close", L("close_close"), L("meal_title") }
+			end
+		elseif free and ps.trayAt == "hand" then
+			e1 = { "tray_down", downText, icon }
+		elseif free and not handsBusy() then
+			if open then
+				if ps.bowlAt == i and meatInPan and meatFits then
+					e1 = { "meat_on", L("p_meat_on"), "🥩" }
+				elseif m.bread ~= "classic" then
+					e1 = { "close", L(verb), L("meal_title") }
+				end
+				e2 = { "pickup", L("p_pickup_meal"), "✋" }
+			elseif mine then
+				e1 = { "pack_takeaway", L("p_pack_takeaway"), "🛍️" }
+				e2 = { "pack_plate", L("p_pack_plate"), "🍽️" }
+			elseif ps.bowlAt == i then
+				e1 = { "bowl_up", L("p_bowl_up"), "🥩" }
+				e2 = ps.trayAt == i and { "tray_up", upText, icon } or nil
+			elseif ps.trayAt == i then
+				e1 = { "tray_up", upText, icon }
+			end
+		end
+		set(prompt, e1 and e1[1], e1 and e1[2], e1 and e1[3])
+		set(p2, e2 and e2[1], e2 and e2[2], e2 and e2[3])
 	elseif kind == "drink" then
 		local def = IngredientData.Drinks[item]
 		prompt.ActionText = L("p_drink")
 		prompt.ObjectText = def.name[State.lang] .. stockText(def.stock)
-		prompt.Enabled = #(ps.tray or {}) < (ps.trayCap or 2)
+		-- onto the tray in your hands (or a new one)
+		prompt.Enabled = #(ps.tray or {}) < (ps.trayCap or 2) and not handsBusyNoTray() and type(ps.trayAt) ~= "number"
 	elseif kind == "trash" then
+		-- only what you carry to the bin
 		prompt.ActionText = L("p_discard")
-		prompt.ObjectText = m and L("meal_title") or L("tray")
-		prompt.Enabled = m ~= nil or #(ps.tray or {}) > 0
+		prompt.ObjectText = heldMeal() and L("meal_title") or (ps.bowlAt == "hand" and L("bowl_label") or (ps.lid and "🍞" or L("tray")))
+		prompt.Enabled = heldMeal() or ps.bowlAt == "hand" or ps.lid == true or (ps.trayAt == "hand" and #(ps.tray or {}) > 0)
 	elseif kind == "register" then
 		local ordering = false
 		for _, c in ipairs(CollectionService:GetTagged("Customer")) do
@@ -210,8 +331,6 @@ local function refreshStation(e: Entry)
 		local waste = type(carry) == "string" and carry:sub(1, 6) == "waste:"
 		prompt.ActionText = waste and (State.lang == "de" and "Einwerfen" or "Throw in") or (State.lang == "de" and "Füllstand" or "Fill level")
 		prompt.HoldDuration = waste and 0.3 or 0
-	elseif kind == "spit_unload" then
-		prompt.Enabled = carry == nil and part:GetAttribute("PromptOn") ~= false
 	elseif carry and (kind == "bread" or kind == "veg" or kind == "cheese" or kind == "sauce" or kind == "drink") then
 		local sid = kind == "veg" and item or kind == "cheese" and "cheese" or (kind == "bread" and item == "box") and "box" or (kind == "bread" and "bread_" or kind == "sauce" and "sauce_" or "drink_") .. tostring(item)
 		prompt.Enabled = sid == carry
@@ -246,6 +365,14 @@ local function addStation(part: Instance)
 	if kind == "board" then
 		e.prompt2 = makePrompt(part, Enum.KeyCode.R, Enum.KeyCode.ButtonY)
 		;(e.prompt2 :: ProximityPrompt).UIOffset = Vector2.new(0, 80)
+		part:GetAttributeChangedSignal("User"):Connect(function()
+			refreshStation(e)
+		end)
+	elseif kind == "sauce" then
+		-- the bottle was taken / put back by someone
+		part:GetAttributeChangedSignal("HeldBy"):Connect(function()
+			refreshStation(e)
+		end)
 	end
 	if kind == "spit" then
 		prompt.MaxActivationDistance = Config.Prep.PromptDistance + 1
@@ -414,15 +541,22 @@ function Interaction.Init()
 	end
 	-- coalesce bursts of state updates into one refresh per frame
 	local queued = false
-	State.Changed:Connect(function(what)
-		if (what == "player" or what == "shop") and not queued then
+	local function queueRefresh()
+		if not queued then
 			queued = true
 			task.defer(function()
 				queued = false
 				Interaction.RefreshAll()
 			end)
 		end
+	end
+	State.Changed:Connect(function(what)
+		if what == "player" or what == "shop" then
+			queueRefresh()
+		end
 	end)
+	-- picking up / putting down a box or meat cone frees or fills the hands
+	game:GetService("Players").LocalPlayer:GetAttributeChangedSignal("Carry"):Connect(queueRefresh)
 	-- periodic refresh only for live values (spit doneness, grill timer, register) close to the player
 	local LIVE = { spit = true, grill = true, register = true }
 	task.spawn(function()
